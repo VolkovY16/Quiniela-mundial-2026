@@ -28,7 +28,7 @@ export async function loginUser(username) {
 
 export async function loginAdmin(password) {
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: 'admin@quiniela.local',
+    email: 'yaroslavvolkov@hotmail.com',
     password,
   });
   if (error) throw error;
