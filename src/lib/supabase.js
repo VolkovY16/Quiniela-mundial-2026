@@ -99,11 +99,16 @@ export async function getUserBonusPicks(userId) {
 }
 
 export async function confirmQuiniela(userId) {
-  const { error } = await supabase.from('users_meta').upsert({
-    user_id: userId,
-    confirmed: true,
-    confirmed_at: new Date().toISOString(),
-  }, { onConflict: 'user_id' });
+  const { error } = await supabase.from('users_meta')
+    .update({ confirmed: true, confirmed_at: new Date().toISOString() })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function unconfirmQuiniela(userId) {
+  const { error } = await supabase.from('users_meta')
+    .update({ confirmed: false, confirmed_at: null })
+    .eq('user_id', userId);
   if (error) throw error;
 }
 

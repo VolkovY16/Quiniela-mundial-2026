@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getAllGroupMatches, GROUPS, FLAGS, HOST_TEAMS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate } from '../lib/worldcupData.js';
-import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, getAllUserPicks, savePick, saveKnockoutPick, confirmQuiniela, supabase } from '../lib/supabase.js';
+import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, getAllUserPicks, savePick, saveKnockoutPick, confirmQuiniela, unconfirmQuiniela, supabase } from '../lib/supabase.js';
 
 // ─── ADMIN KNOCKOUT RESULTS ──────────────────────────────────────────────────
 function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleToggleDouble }) {
@@ -98,10 +98,19 @@ function AdminUserEditor({ users, allMatches }) {
     setSaving('');
   }
 
+  async function handleConfirm() {
+    if (!selectedUser) return;
+    if (!window.confirm(`¿Confirmar la quiniela de ${selectedUser.username}?`)) return;
+    await confirmQuiniela(selectedUser.user_id);
+    setSelectedUser(prev => ({ ...prev, confirmed: true }));
+    alert('Quiniela confirmada.');
+  }
+
   async function handleUnconfirm() {
     if (!selectedUser) return;
     if (!window.confirm(`¿Desconfirmar la quiniela de ${selectedUser.username}? Podrá editarla de nuevo.`)) return;
-    await supabase.from('users_meta').update({ confirmed: false, confirmed_at: null }).eq('user_id', selectedUser.user_id);
+    await unconfirmQuiniela(selectedUser.user_id);
+    setSelectedUser(prev => ({ ...prev, confirmed: false }));
     alert('Quiniela desconfirmada. El usuario puede editarla de nuevo.');
   }
 
@@ -113,7 +122,7 @@ function AdminUserEditor({ users, allMatches }) {
           {users.map(u => (
             <button key={u.user_id} className="user-edit-btn" onClick={() => loadUserPicks(u)}>
               <span>{u.username}</span>
-              <span className={`user-status ${u.confirmed ? 'confirmed' : 'pending'}`}>{u.confirmed ? '✓ Confirmada' : 'Pendiente'}</span>
+              <span className={`user-status ${u.confirmed ? 'confirmed' : 'pending'}`}>{u.confirmed ? '✓ Confirmada' : '⏳ Pendiente'}</span>
               <span className="edit-arrow">Editar →</span>
             </button>
           ))}
@@ -127,7 +136,12 @@ function AdminUserEditor({ users, allMatches }) {
       <div className="editor-header">
         <button className="btn-back" onClick={() => setSelectedUser(null)}>← Volver</button>
         <h3>Editando quiniela de: <strong>{selectedUser.username}</strong></h3>
-        <button className="btn-unconfirm" onClick={handleUnconfirm}>Desconfirmar quiniela</button>
+        {!selectedUser.confirmed && (
+          <button className="btn-confirm-admin" onClick={handleConfirm}>✓ Confirmar quiniela</button>
+        )}
+        {selectedUser.confirmed && (
+          <button className="btn-unconfirm" onClick={handleUnconfirm}>Desconfirmar quiniela</button>
+        )}
       </div>
 
       <div className="admin-group-tabs">
