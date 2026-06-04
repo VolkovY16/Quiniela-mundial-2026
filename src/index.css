@@ -338,3 +338,31 @@ h1,h2,h3,h4 { font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.02e
   .username-badge { display: none; }
   .ko-matches-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── MATCH META (date/venue) ───────────────────────────────────────────────── */
+.match-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.35rem; }
+.match-date { font-size: 0.75rem; font-weight: 600; color: var(--green); }
+.match-venue { font-size: 0.72rem; color: var(--muted); }
+.match-body { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.match-row { flex-direction: column; align-items: flex-start; }
+
+/* ─── ADMIN KNOCKOUT ────────────────────────────────────────────────────────── */
+.admin-knockout { }
+.admin-ko-match { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+.admin-ko-match.is-double { border-left: 4px solid var(--gold); }
+.admin-ko-sources { display: flex; gap: 0.5rem; align-items: center; margin: 0.4rem 0; font-size: 0.8rem; color: var(--muted); }
+.source-label { font-weight: 600; }
+.vs-label { color: var(--muted); }
+.third-note { font-size: 0.72rem; color: var(--muted); font-style: italic; }
+.admin-ko-teams { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.5rem 0; }
+.toggle-double.small { font-size: 0.75rem; padding: 0.25rem 0.5rem; margin-top: 0.5rem; }
+
+/* ─── ADMIN USER EDITOR ─────────────────────────────────────────────────────── */
+.user-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+.user-edit-btn { display: flex; align-items: center; justify-content: space-between; background: white; border: 1.5px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; cursor: pointer; transition: border-color 0.15s; font-size: 0.95rem; }
+.user-edit-btn:hover { border-color: var(--green); }
+.edit-arrow { color: var(--green); font-weight: 600; }
+.editor-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.btn-back { background: none; border: 1.5px solid var(--border); border-radius: 6px; padding: 0.4rem 0.8rem; cursor: pointer; font-size: 0.9rem; }
+.btn-unconfirm { background: #fef2f2; border: 1.5px solid #fca5a5; color: var(--red); border-radius: 6px; padding: 0.4rem 0.8rem; cursor: pointer; font-size: 0.85rem; font-weight: 600; margin-left: auto; }
+.admin-user-editor { }
