@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase.js';
 import LoginPage from './pages/LoginPage.jsx';
 import QuinielasPage from './pages/QuinielasPage.jsx';
@@ -9,40 +9,45 @@ import './index.css';
 export default function App() {
   const [session, setSession] = useState(null);
   const [userMeta, setUserMeta] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [ready, setReady] = useState(false);
   const [page, setPage] = useState('quiniela');
 
-  const fetchUserMeta = useCallback(async (userId) => {
-    setLoadingMeta(true);
-    try {
-      const { data } = await supabase
-        .from('users_meta')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      setUserMeta(data || null);
-    } catch (e) {
-      setUserMeta(null);
-    } finally {
-      setLoadingMeta(false);
-    }
-  }, []);
-
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: sess } }) => {
-      setSession(sess || null);
-      if (sess) {
-        fetchUserMeta(sess.user.id).finally(() => setLoadingAuth(false));
-      } else {
-        setLoadingAuth(false);
+    async function init() {
+      try {
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        setSession(sess || null);
+        if (sess?.user?.id) {
+          const { data } = await supabase
+            .from('users_meta')
+            .select('*')
+            .eq('user_id', sess.user.id)
+            .single();
+          setUserMeta(data || null);
+        }
+      } catch (e) {
+        // ignore errors, just show login
       }
-    }).catch(() => setLoadingAuth(false));
+      setReady(true);
+    }
+
+    // 6 second hard timeout
+    const timer = setTimeout(() => setReady(true), 6000);
+    init().finally(() => clearTimeout(timer));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       setSession(sess || null);
-      if (sess) {
-        await fetchUserMeta(sess.user.id);
+      if (sess?.user?.id) {
+        try {
+          const { data } = await supabase
+            .from('users_meta')
+            .select('*')
+            .eq('user_id', sess.user.id)
+            .single();
+          setUserMeta(data || null);
+        } catch (e) {
+          setUserMeta(null);
+        }
       } else {
         setUserMeta(null);
         setPage('quiniela');
@@ -50,7 +55,7 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchUserMeta]);
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -59,7 +64,7 @@ export default function App() {
     setPage('quiniela');
   }
 
-  if (loadingAuth || loadingMeta) {
+  if (!ready) {
     return (
       <div className="loading-screen">
         <div className="loading-ball">⚽</div>
