@@ -143,8 +143,14 @@ export function computeThirdPlaces(picks) {
     const sorted = Object.values(table).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
     if (sorted[2]) thirds.push(sorted[2]);
   }
-  // Sort all thirds and return best 8
-  return thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+  // Sort: pts → gd → gf → fewer goals against → group letter (FIFA tiebreaker order)
+  return thirds.sort((a, b) =>
+    b.pts - a.pts ||
+    b.gd - a.gd ||
+    b.gf - a.gf ||
+    a.ga - b.ga ||
+    a.group.localeCompare(b.group)
+  );
 }
 
 // For each R32 match that needs a third place, which groups can provide it
