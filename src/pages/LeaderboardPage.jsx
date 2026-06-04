@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDoubleMatches, supabase } from '../lib/supabase.js';
-import { getAllGroupMatches, GROUPS, FLAGS } from '../lib/worldcupData.js';
+import { getAllGroupMatches } from '../lib/worldcupData.js';
 import { computeLeaderboard } from '../lib/scoring.js';
 
 export default function LeaderboardPage({ session, userMeta }) {
@@ -11,12 +11,12 @@ export default function LeaderboardPage({ session, userMeta }) {
   useEffect(() => {
     loadLeaderboard();
 
-    // Real-time subscription
     const channel = supabase
       .channel('leaderboard_updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => loadLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'knockout_results' }, () => loadLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bonus_challenges' }, () => loadLeaderboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users_meta' }, () => loadLeaderboard())
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -33,7 +33,6 @@ export default function LeaderboardPage({ session, userMeta }) {
         getDoubleMatches(),
       ]);
 
-      // Get bonus picks for all users
       const { data: bonusPicksData } = await supabase.from('bonus_picks').select('*');
 
       const groupMatches = getAllGroupMatches();
@@ -59,6 +58,7 @@ export default function LeaderboardPage({ session, userMeta }) {
   }
 
   const medals = ['🥇', '🥈', '🥉'];
+  const hasResults = leaderboard.some(e => e.totalPts > 0);
 
   return (
     <div className="leaderboard-page">
@@ -82,10 +82,15 @@ export default function LeaderboardPage({ session, userMeta }) {
         <span className="legend-item tiebreak">Desempate: exactos → goles</span>
       </div>
 
+      {!hasResults && leaderboard.length > 0 && (
+        <div className="leaderboard-notice">
+          ⏳ El torneo aún no ha comenzado — los puntos se actualizarán cuando el admin ingrese resultados reales.
+        </div>
+      )}
+
       {leaderboard.length === 0 && !loading ? (
         <div className="leaderboard-empty">
-          <p>Aún no hay resultados registrados.</p>
-          <p className="muted">La tabla se actualizará automáticamente cuando el admin ingrese resultados.</p>
+          <p>Aún no hay participantes registrados.</p>
         </div>
       ) : (
         <div className="leaderboard-table-wrap">
@@ -105,14 +110,17 @@ export default function LeaderboardPage({ session, userMeta }) {
               {leaderboard.map((entry, i) => {
                 const isMe = entry.userId === session?.user?.id;
                 return (
-                  <tr key={entry.userId} className={`lb-row ${isMe ? 'lb-me' : ''} ${i < 3 ? 'lb-podium' : ''}`}>
+                  <tr key={entry.userId} className={`lb-row ${isMe ? 'lb-me' : ''} ${i < 3 && hasResults ? 'lb-podium' : ''}`}>
                     <td className="lb-pos">
-                      {i < 3 ? medals[i] : <span className="pos-number">{i + 1}</span>}
+                      {i < 3 && hasResults ? medals[i] : <span className="pos-number">{i + 1}</span>}
                     </td>
                     <td className="lb-name">
                       {entry.username}
                       {isMe && <span className="you-badge">Tú</span>}
-                      {!entry.confirmed && <span className="unconfirmed-badge">Sin confirmar</span>}
+                      {entry.confirmed
+                        ? <span className="confirmed-small">✓</span>
+                        : <span className="unconfirmed-badge">Sin confirmar</span>
+                      }
                     </td>
                     <td className="lb-pts">{entry.totalPts}</td>
                     <td className="lb-exact">{entry.exactHits}</td>

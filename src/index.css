@@ -371,3 +371,6 @@ h1,h2,h3,h4 { font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.02e
 .third-pending { background: #fef9ec !important; border-color: #f5c842 !important; }
 .third-tbd { font-size: 0.8rem; color: #92400e; font-style: italic; }
 .thirds-warning { color: #92400e; font-weight: 600; }
+
+.confirmed-small { color: var(--green); font-size: 0.8rem; margin-left: 0.3rem; font-weight: 700; }
+.leaderboard-notice { background: #fffbeb; border: 1px solid #f5c842; color: #92400e; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.88rem; }

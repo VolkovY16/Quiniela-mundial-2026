@@ -6,6 +6,20 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import './index.css';
 
+async function fetchMeta(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('users_meta')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    if (error || !data) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [userMeta, setUserMeta] = useState(null);
@@ -16,18 +30,17 @@ export default function App() {
     async function init() {
       try {
         const { data: { session: sess } } = await supabase.auth.getSession();
-        setSession(sess || null);
         if (sess?.user?.id) {
-          const { data } = await supabase
-            .from('users_meta')
-            .select('*')
-            .eq('user_id', sess.user.id)
-            .single();
-          setUserMeta(data || null);
+          const meta = await fetchMeta(sess.user.id);
+          if (!meta) {
+            // Session exists but no users_meta — force logout
+            await handleLogout(false);
+            return;
+          }
+          setSession(sess);
+          setUserMeta(meta);
         }
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) { /* ignore */ }
       setReady(true);
     }
 
@@ -35,41 +48,34 @@ export default function App() {
     init().finally(() => clearTimeout(timer));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      setSession(sess || null);
-      if (sess?.user?.id) {
-        try {
-          const { data } = await supabase
-            .from('users_meta')
-            .select('*')
-            .eq('user_id', sess.user.id)
-            .single();
-          setUserMeta(data || null);
-        } catch (e) {
-          setUserMeta(null);
-        }
-      } else {
+      if (!sess) {
+        setSession(null);
         setUserMeta(null);
         setPage('quiniela');
+        return;
       }
+      const meta = await fetchMeta(sess.user.id);
+      if (!meta) {
+        await handleLogout(false);
+        return;
+      }
+      setSession(sess);
+      setUserMeta(meta);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  async function handleLogout() {
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-    } catch (e) {
-      // ignore
-    }
-    // Clear all Supabase keys from localStorage
+  async function handleLogout(reload = true) {
+    try { await supabase.auth.signOut({ scope: 'global' }); } catch (e) {}
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('sb-')) localStorage.removeItem(key);
     });
     setSession(null);
     setUserMeta(null);
     setPage('quiniela');
-    window.location.reload();
+    setReady(true);
+    if (reload) window.location.reload();
   }
 
   if (!ready) {
@@ -102,7 +108,7 @@ export default function App() {
           </nav>
           <div className="header-user">
             <span className="username-badge">{userMeta?.username || 'Usuario'}</span>
-            <button className="logout-btn" onClick={handleLogout}>Salir</button>
+            <button className="logout-btn" onClick={() => handleLogout(true)}>Salir</button>
           </div>
         </div>
       </header>
