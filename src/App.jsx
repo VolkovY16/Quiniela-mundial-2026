@@ -9,27 +9,42 @@ import './index.css';
 export default function App() {
   const [session, setSession] = useState(null);
   const [userMeta, setUserMeta] = useState(null);
-  const [page, setPage] = useState('quiniela'); // 'quiniela' | 'leaderboard' | 'admin'
+  const [page, setPage] = useState('quiniela');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Timeout de seguridad — si Supabase no responde en 5s, muestra el login
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
     getSession().then(async (sess) => {
+      clearTimeout(timeout);
       setSession(sess);
       if (sess) await fetchUserMeta(sess.user.id);
+      setLoading(false);
+    }).catch(() => {
+      clearTimeout(timeout);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       setSession(sess);
       if (sess) await fetchUserMeta(sess.user.id);
-      else { setUserMeta(null); }
+      else setUserMeta(null);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function fetchUserMeta(userId) {
-    const { data } = await supabase.from('users_meta').select('*').eq('user_id', userId).single();
-    setUserMeta(data);
+    try {
+      const { data } = await supabase.from('users_meta').select('*').eq('user_id', userId).single();
+      setUserMeta(data);
+    } catch (e) {
+      console.error('Error fetching user meta:', e);
+    }
   }
 
   if (loading) {
@@ -42,7 +57,7 @@ export default function App() {
   }
 
   if (!session) {
-    return <LoginPage onLogin={() => {}} />;
+    return <LoginPage />;
   }
 
   const isAdmin = userMeta?.is_admin;
