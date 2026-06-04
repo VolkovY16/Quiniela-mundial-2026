@@ -168,23 +168,29 @@ export const THIRD_PLACE_SLOTS = {
 
 // Given all thirds sorted best-first, assign them to slots
 export function assignThirdsToSlots(sortedThirds) {
+  const best8 = sortedThirds.slice(0, 8);
+  const slots = Object.keys(THIRD_PLACE_SLOTS);
   const assigned = {};
-  const usedGroups = new Set();
 
-  // Slot order by priority (higher-ranked thirds get better slots)
-  const slotKeys = Object.keys(THIRD_PLACE_SLOTS);
+  // Use backtracking to find a valid assignment
+  function backtrack(slotIdx, usedGroups) {
+    if (slotIdx === slots.length) return true;
+    const slot = slots[slotIdx];
+    const validGroups = THIRD_PLACE_SLOTS[slot];
 
-  for (const third of sortedThirds.slice(0, 8)) {
-    if (usedGroups.has(third.group)) continue;
-    // Find first slot that accepts this group
-    for (const slot of slotKeys) {
-      if (!assigned[slot] && THIRD_PLACE_SLOTS[slot].includes(third.group)) {
-        assigned[slot] = third.team;
-        usedGroups.add(third.group);
-        break;
-      }
+    for (const third of best8) {
+      if (usedGroups.has(third.group)) continue;
+      if (!validGroups.includes(third.group)) continue;
+      assigned[slot] = third.team;
+      usedGroups.add(third.group);
+      if (backtrack(slotIdx + 1, usedGroups)) return true;
+      delete assigned[slot];
+      usedGroups.delete(third.group);
     }
+    return false;
   }
+
+  backtrack(0, new Set());
   return assigned;
 }
 
