@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { getAllGroupMatches, GROUPS, FLAGS, HOST_TEAMS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate } from '../lib/worldcupData.js';
+import { getAllGroupMatches, GROUPS, FLAGS, HOST_TEAMS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
+import { computeGroupTable } from '../lib/scoring.js';
 import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, getAllUserPicks, savePick, saveKnockoutPick, confirmQuiniela, unconfirmQuiniela, supabase } from '../lib/supabase.js';
 
 // ─── ADMIN KNOCKOUT RESULTS ──────────────────────────────────────────────────
-function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleToggleDouble }) {
+function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleToggleDouble, realResults }) {
   const [phase, setPhase] = useState('r32');
 
   async function handleKoResult(matchId, winner) {
@@ -12,16 +13,51 @@ function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleTo
     await saveKnockoutResult(matchId, winner, phase);
   }
 
-  function resolveFromKo(source) {
+  // Derive real group standings from admin-entered results
+  function getRealGroupStanding(groupId, pos) {
+    const group = GROUPS[groupId];
+    const groupMatches = getAllGroupMatches().filter(m => m.group === groupId);
+    const resultsMap = {};
+    for (const r of realResults) resultsMap[r.match_id] = r;
+    const table = computeGroupTable(group.teams, groupMatches, Object.values(resultsMap));
+    return table[pos - 1]?.team || null;
+  }
+
+  // Resolve real third places
+  const realThirds = (() => {
+    const picksFromResults = {};
+    for (const r of realResults) {
+      picksFromResults[r.match_id] = { home_goals: r.home_goals, away_goals: r.away_goals };
+    }
+    const thirds = computeThirdPlaces(picksFromResults);
+    return assignThirdsToSlots(thirds);
+  })();
+
+  function resolveSource(source) {
+    if (!source) return null;
+    const gMatch = source.match(/^([A-L])([12])$/);
+    if (gMatch) return getRealGroupStanding(gMatch[1], Number(gMatch[2]));
     return koResults[source]?.winner || null;
   }
 
+  function resolveThird(matchId) {
+    return realThirds[matchId] || null;
+  }
+
   const phases = [
-    { id: 'r32', label: 'Dieciseisavos', fixtures: R32_BRACKET.map(m => ({ ...m, home: m.homeSource?.match(/^[A-L][12]$/) ? `1°/2° Grupo ${m.homeSource[0]}` : resolveFromKo(m.homeSource), away: m.awaySource?.match(/^[A-L][12]$/) ? `1°/2° Grupo ${m.awaySource[0]}` : resolveFromKo(m.awaySource), homeLabel: m.homeSource, awayLabel: m.awaySource, thirdLabel: m.thirdSources })) },
-    { id: 'r16', label: 'Octavos', fixtures: R16_BRACKET.map(m => ({ ...m, home: resolveFromKo(m.homeSource), away: resolveFromKo(m.awaySource) })) },
-    { id: 'qf',  label: 'Cuartos',  fixtures: QF_BRACKET.map(m => ({ ...m, home: resolveFromKo(m.homeSource), away: resolveFromKo(m.awaySource) })) },
-    { id: 'sf',  label: 'Semis',    fixtures: SF_BRACKET.map(m => ({ ...m, home: resolveFromKo(m.homeSource), away: resolveFromKo(m.awaySource) })) },
-    { id: 'final', label: 'Final',  fixtures: [{ ...FINAL, home: resolveFromKo(FINAL.homeSource), away: resolveFromKo(FINAL.awaySource) }, { ...THIRD_PLACE, home: resolveFromKo('sf_101'), away: resolveFromKo('sf_102') }] },
+    { id: 'r32', label: 'Dieciseisavos', fixtures: R32_BRACKET.map(m => ({
+        ...m,
+        home: resolveSource(m.homeSource),
+        away: m.awaySource ? resolveSource(m.awaySource) : resolveThird(m.id),
+        homeLabel: m.homeSource,
+        awayLabel: m.awaySource || `3° (${m.thirdSources})`,
+        thirdLabel: m.thirdSources
+      }))
+    },
+    { id: 'r16', label: 'Octavos', fixtures: R16_BRACKET.map(m => ({ ...m, home: koResults[m.homeSource]?.winner || null, away: koResults[m.awaySource]?.winner || null })) },
+    { id: 'qf',  label: 'Cuartos',  fixtures: QF_BRACKET.map(m => ({ ...m, home: koResults[m.homeSource]?.winner || null, away: koResults[m.awaySource]?.winner || null })) },
+    { id: 'sf',  label: 'Semis',    fixtures: SF_BRACKET.map(m => ({ ...m, home: koResults[m.homeSource]?.winner || null, away: koResults[m.awaySource]?.winner || null })) },
+    { id: 'final', label: 'Final',  fixtures: [{ ...FINAL, home: koResults[FINAL.homeSource]?.winner || null, away: koResults[FINAL.awaySource]?.winner || null }, { ...THIRD_PLACE, home: koResults['sf_101']?.winner || null, away: koResults['sf_102']?.winner || null }] },
   ];
 
   const phaseData = phases.find(p => p.id === phase);
@@ -301,7 +337,7 @@ export default function AdminPage() {
         <div className="admin-results">
           <h3>Bracket real de Eliminatorias</h3>
           <p className="muted">Selecciona al ganador de cada partido conforme avance el torneo.</p>
-          <AdminKnockoutBracket koResults={koResults} setKoResults={setKoResults} doubleMatches={doubleMatches} handleToggleDouble={handleToggleDouble} />
+          <AdminKnockoutBracket koResults={koResults} setKoResults={setKoResults} doubleMatches={doubleMatches} handleToggleDouble={handleToggleDouble} realResults={Object.values(results)} />
         </div>
       )}
 

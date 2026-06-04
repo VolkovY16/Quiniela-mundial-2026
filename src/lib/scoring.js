@@ -83,11 +83,11 @@ export function computeLeaderboard({ users, allPicks, allKoPicks, results, koRes
     // Knockout stages
     for (const result of koResults) {
       const pick = userKoPicks.find(p => p.match_id === result.match_id);
-      if (!pick) continue;
-      const isDouble = doubleMatches.includes(result.match_id);
-      let pts = pick.winner === result.winner ? SCORING.correctWinner : 0;
-      if (isDouble) pts *= SCORING.doubleMultiplier;
+      if (!pick || !result.winner) continue;
       if (pick.winner === result.winner) {
+        const isDouble = doubleMatches.includes(result.match_id);
+        let pts = SCORING.correctWinner;
+        if (isDouble) pts *= SCORING.doubleMultiplier;
         totalPts += pts;
         exactHits++;
         correctWinners++;
