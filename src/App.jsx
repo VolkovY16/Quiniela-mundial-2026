@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, getSession } from './lib/supabase.js';
+import { supabase } from './lib/supabase.js';
 import LoginPage from './pages/LoginPage.jsx';
 import QuinielasPage from './pages/QuinielasPage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
@@ -7,47 +7,45 @@ import AdminPage from './pages/AdminPage.jsx';
 import './index.css';
 
 export default function App() {
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState(undefined); // undefined = still loading
   const [userMeta, setUserMeta] = useState(null);
   const [page, setPage] = useState('quiniela');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Timeout de seguridad — si Supabase no responde en 5s, muestra el login
-    const timeout = setTimeout(() => setLoading(false), 5000);
-
-    getSession().then(async (sess) => {
-      clearTimeout(timeout);
-      setSession(sess);
-      if (sess) await fetchUserMeta(sess.user.id);
-      setLoading(false);
-    }).catch(() => {
-      clearTimeout(timeout);
-      setLoading(false);
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      setSession(sess || null);
+      if (sess) fetchUserMeta(sess.user.id);
     });
 
+    // Listen for auth changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      setSession(sess);
-      if (sess) await fetchUserMeta(sess.user.id);
-      else setUserMeta(null);
+      setSession(sess || null);
+      if (sess) {
+        await fetchUserMeta(sess.user.id);
+      } else {
+        setUserMeta(null);
+      }
     });
 
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   async function fetchUserMeta(userId) {
     try {
-      const { data } = await supabase.from('users_meta').select('*').eq('user_id', userId).single();
-      setUserMeta(data);
+      const { data } = await supabase
+        .from('users_meta')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      setUserMeta(data || null);
     } catch (e) {
-      console.error('Error fetching user meta:', e);
+      setUserMeta(null);
     }
   }
 
-  if (loading) {
+  // Still loading
+  if (session === undefined) {
     return (
       <div className="loading-screen">
         <div className="loading-ball">⚽</div>
@@ -56,11 +54,12 @@ export default function App() {
     );
   }
 
+  // Not logged in
   if (!session) {
     return <LoginPage />;
   }
 
-  const isAdmin = userMeta?.is_admin;
+  const isAdmin = userMeta?.is_admin === true;
 
   return (
     <div className="app">
@@ -84,7 +83,7 @@ export default function App() {
             )}
           </nav>
           <div className="header-user">
-            <span className="username-badge">{userMeta?.username || 'Usuario'}</span>
+            <span className="username-badge">{userMeta?.username || session.user.email?.split('@')[0]}</span>
             <button className="logout-btn" onClick={() => supabase.auth.signOut()}>Salir</button>
           </div>
         </div>
