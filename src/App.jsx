@@ -26,12 +26,11 @@ export default function App() {
           setUserMeta(data || null);
         }
       } catch (e) {
-        // ignore errors, just show login
+        // ignore
       }
       setReady(true);
     }
 
-    // 6 second hard timeout
     const timer = setTimeout(() => setReady(true), 6000);
     init().finally(() => clearTimeout(timer));
 
@@ -58,10 +57,19 @@ export default function App() {
   }, []);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch (e) {
+      // ignore
+    }
+    // Clear all Supabase keys from localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
     setSession(null);
     setUserMeta(null);
     setPage('quiniela');
+    window.location.reload();
   }
 
   if (!ready) {
