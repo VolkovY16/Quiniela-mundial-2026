@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase.js';
 import LoginPage from './pages/LoginPage.jsx';
 import QuinielasPage from './pages/QuinielasPage.jsx';
@@ -9,55 +9,57 @@ import './index.css';
 export default function App() {
   const [session, setSession] = useState(null);
   const [userMeta, setUserMeta] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loadingMeta, setLoadingMeta] = useState(false);
   const [page, setPage] = useState('quiniela');
 
-  useEffect(() => {
-    let done = false;
-
-    function finish(sess) {
-      if (done) return;
-      done = true;
-      setSession(sess || null);
-      setLoading(false);
-      if (sess) fetchUserMeta(sess.user.id);
-    }
-
-    // Timeout de 4 segundos — si Supabase no responde, muestra login
-    const timer = setTimeout(() => finish(null), 4000);
-
-    supabase.auth.getSession()
-      .then(({ data }) => {
-        clearTimeout(timer);
-        finish(data?.session || null);
-      })
-      .catch(() => {
-        clearTimeout(timer);
-        finish(null);
-      });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      setSession(sess || null);
-      if (sess) fetchUserMeta(sess.user.id);
-      else setUserMeta(null);
-    });
-
-    return () => {
-      clearTimeout(timer);
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  async function fetchUserMeta(userId) {
+  const fetchUserMeta = useCallback(async (userId) => {
+    setLoadingMeta(true);
     try {
-      const { data } = await supabase.from('users_meta').select('*').eq('user_id', userId).single();
+      const { data } = await supabase
+        .from('users_meta')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
       setUserMeta(data || null);
     } catch (e) {
       setUserMeta(null);
+    } finally {
+      setLoadingMeta(false);
     }
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      setSession(sess || null);
+      if (sess) {
+        fetchUserMeta(sess.user.id).finally(() => setLoadingAuth(false));
+      } else {
+        setLoadingAuth(false);
+      }
+    }).catch(() => setLoadingAuth(false));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      setSession(sess || null);
+      if (sess) {
+        await fetchUserMeta(sess.user.id);
+      } else {
+        setUserMeta(null);
+        setPage('quiniela');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchUserMeta]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setSession(null);
+    setUserMeta(null);
+    setPage('quiniela');
   }
 
-  if (loading) {
+  if (loadingAuth || loadingMeta) {
     return (
       <div className="loading-screen">
         <div className="loading-ball">⚽</div>
@@ -86,8 +88,8 @@ export default function App() {
             )}
           </nav>
           <div className="header-user">
-            <span className="username-badge">{userMeta?.username || '...'}</span>
-            <button className="logout-btn" onClick={() => supabase.auth.signOut()}>Salir</button>
+            <span className="username-badge">{userMeta?.username || 'Usuario'}</span>
+            <button className="logout-btn" onClick={handleLogout}>Salir</button>
           </div>
         </div>
       </header>
