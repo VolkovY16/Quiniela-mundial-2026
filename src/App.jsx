@@ -8,15 +8,27 @@ import './index.css';
 
 async function fetchMeta(userId) {
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('users_meta')
       .select('*')
       .eq('user_id', userId)
       .single();
-    if (error || !data) return null;
-    return data;
+    return data || null;
   } catch (e) {
     return null;
+  }
+}
+
+async function createMeta(userId, username) {
+  try {
+    await supabase.from('users_meta').upsert({
+      user_id: userId,
+      username: username || 'Usuario',
+      confirmed: false,
+      is_admin: false,
+    }, { onConflict: 'user_id' });
+  } catch (e) {
+    console.error('Error creating meta:', e);
   }
 }
 
@@ -26,31 +38,39 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [page, setPage] = useState('quiniela');
 
+  async function loadSessionAndMeta(sess) {
+    if (!sess?.user?.id) return;
+
+    let meta = await fetchMeta(sess.user.id);
+
+    // If no meta found, create it from the session data
+    if (!meta) {
+      const username = sess.user.user_metadata?.username || 
+                       sess.user.email?.split('@')[0] || 
+                       'Usuario';
+      await createMeta(sess.user.id, username);
+      // Try fetching again
+      meta = await fetchMeta(sess.user.id);
+    }
+
+    setSession(sess);
+    setUserMeta(meta);
+  }
+
   useEffect(() => {
     async function init() {
       try {
         const { data: { session: sess } } = await supabase.auth.getSession();
         if (sess?.user?.id) {
-          // Retry up to 3 times — new users may need a moment for users_meta to be created
-          let meta = null;
-          for (let i = 0; i < 3; i++) {
-            meta = await fetchMeta(sess.user.id);
-            if (meta) break;
-            await new Promise(r => setTimeout(r, 800));
-          }
-          if (!meta) {
-            // Still no meta after retries — force logout
-            await handleLogout(false);
-            return;
-          }
-          setSession(sess);
-          setUserMeta(meta);
+          await loadSessionAndMeta(sess);
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        console.error('Init error:', e);
+      }
       setReady(true);
     }
 
-    const timer = setTimeout(() => setReady(true), 6000);
+    const timer = setTimeout(() => setReady(true), 8000);
     init().finally(() => clearTimeout(timer));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
@@ -60,19 +80,13 @@ export default function App() {
         setPage('quiniela');
         return;
       }
-      const meta = await fetchMeta(sess.user.id);
-      if (!meta) {
-        await handleLogout(false);
-        return;
-      }
-      setSession(sess);
-      setUserMeta(meta);
+      await loadSessionAndMeta(sess);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  async function handleLogout(reload = true) {
+  async function handleLogout() {
     try { await supabase.auth.signOut({ scope: 'global' }); } catch (e) {}
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('sb-')) localStorage.removeItem(key);
@@ -80,8 +94,7 @@ export default function App() {
     setSession(null);
     setUserMeta(null);
     setPage('quiniela');
-    setReady(true);
-    if (reload) window.location.reload();
+    window.location.reload();
   }
 
   if (!ready) {
@@ -114,7 +127,7 @@ export default function App() {
           </nav>
           <div className="header-user">
             <span className="username-badge">{userMeta?.username || 'Usuario'}</span>
-            <button className="logout-btn" onClick={() => handleLogout(true)}>Salir</button>
+            <button className="logout-btn" onClick={handleLogout}>Salir</button>
           </div>
         </div>
       </header>

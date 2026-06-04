@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { loginUser, loginAdmin, supabase } from '../lib/supabase.js';
+import { loginUser, loginAdmin } from '../lib/supabase.js';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -17,15 +17,8 @@ export default function LoginPage() {
         await loginAdmin(adminPass);
       } else {
         if (!username.trim()) { setError('Escribe tu nombre'); setLoading(false); return; }
-        const { user, isNew } = await loginUser(username.trim());
-        if (user) {
-          // Always upsert users_meta to ensure it exists
-          await supabase.from('users_meta').upsert({
-            user_id: user.id,
-            username: username.trim(),
-            confirmed: false,
-          }, { onConflict: 'user_id', ignoreDuplicates: true });
-        }
+        await loginUser(username.trim());
+        // users_meta is created automatically by App.jsx after login
       }
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
@@ -74,7 +67,6 @@ export default function LoginPage() {
               </button>
             </>
           )}
-
           {error && <p className="login-error">{error}</p>}
         </form>
 

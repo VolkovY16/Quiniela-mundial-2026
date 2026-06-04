@@ -8,19 +8,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 
 export async function loginUser(username) {
-  // We use username as email: username@quiniela.local
-  const email = `${username.toLowerCase().trim()}@quiniela.local`;
-  const password = `qniela_${username.toLowerCase().trim()}_2026`;
+  const trimmed = username.trim();
+  const email = `${trimmed.toLowerCase()}@quiniela.local`;
+  const password = `qniela_${trimmed.toLowerCase()}_2026`;
 
   // Try sign in first
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
   if (!signInError && signInData.user) return { user: signInData.user, isNew: false };
 
-  // If not found, create account
+  // If not found, create account with username in metadata
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { username } },
+    options: { data: { username: trimmed } },
   });
   if (signUpError) throw signUpError;
   return { user: signUpData.user, isNew: true };
