@@ -18,13 +18,13 @@ export default function LoginPage() {
       } else {
         if (!username.trim()) { setError('Escribe tu nombre'); setLoading(false); return; }
         const { user, isNew } = await loginUser(username.trim());
-        if (isNew && user) {
-          // Save username in users_meta
-          await supabase.from('users_meta').insert({
+        if (user) {
+          // Always upsert users_meta to ensure it exists
+          await supabase.from('users_meta').upsert({
             user_id: user.id,
             username: username.trim(),
             confirmed: false,
-          });
+          }, { onConflict: 'user_id', ignoreDuplicates: true });
         }
       }
     } catch (err) {

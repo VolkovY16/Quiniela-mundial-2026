@@ -31,9 +31,15 @@ export default function App() {
       try {
         const { data: { session: sess } } = await supabase.auth.getSession();
         if (sess?.user?.id) {
-          const meta = await fetchMeta(sess.user.id);
+          // Retry up to 3 times — new users may need a moment for users_meta to be created
+          let meta = null;
+          for (let i = 0; i < 3; i++) {
+            meta = await fetchMeta(sess.user.id);
+            if (meta) break;
+            await new Promise(r => setTimeout(r, 800));
+          }
           if (!meta) {
-            // Session exists but no users_meta — force logout
+            // Still no meta after retries — force logout
             await handleLogout(false);
             return;
           }
