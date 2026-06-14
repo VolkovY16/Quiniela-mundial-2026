@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { GROUPS, FLAGS, getAllGroupMatches, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
+import { GROUPS, FLAGS, getAllGroupMatches, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
 
 function deriveGroupStandings(groupId, picks) {
   const group = GROUPS[groupId];
@@ -20,19 +20,6 @@ function deriveGroupStandings(groupId, picks) {
     else { table[match.home].pts++; table[match.away].pts++; }
   }
   return Object.values(table).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-}
-
-function resolveTeam(source, picks, koPicks, thirdAssignments) {
-  if (!source) return null;
-  const gMatch = source.match(/^([A-L])([12])$/);
-  if (gMatch) {
-    const [, gId, pos] = gMatch;
-    const standings = deriveGroupStandings(gId, picks);
-    return standings[Number(pos) - 1]?.team || null;
-  }
-  // Check if it's a knockout pick
-  const koPick = koPicks[source];
-  return koPick?.winner || null;
 }
 
 function KnockoutMatch({ matchId, homeTeam, awayTeam, thirdLabel, koPicks, onKoPick, confirmed, matchNum, date, venue, thirdPending }) {
@@ -74,7 +61,6 @@ function KnockoutMatch({ matchId, homeTeam, awayTeam, thirdLabel, koPicks, onKoP
 export default function KnockoutSection({ koPicks, picks, confirmed, onKoPick }) {
   const [currentPhase, setCurrentPhase] = useState('r32');
 
-  // Compute third place assignments from user's picks
   const thirdAssignments = useMemo(() => {
     const allThirds = computeThirdPlaces(picks);
     return assignThirdsToSlots(allThirds);
@@ -120,8 +106,6 @@ export default function KnockoutSection({ koPicks, picks, confirmed, onKoPick })
   ];
 
   const phaseData = phases.find(p => p.id === currentPhase);
-
-  // Count how many third-place slots are filled
   const thirdsCount = Object.keys(thirdAssignments).length;
 
   return (

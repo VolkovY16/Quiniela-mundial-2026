@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { GROUPS, FLAGS, getAllGroupMatches, HOST_TEAMS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL } from '../lib/worldcupData.js';
+import { useState, useEffect, useRef } from 'react';
+import { GROUPS, getAllGroupMatches } from '../lib/worldcupData.js';
 import { savePick, saveKnockoutPick, getUserPicks, getUserBonusPicks, saveBonusPick, confirmQuiniela, getUserMeta, getBonusChallenges, getAllResults } from '../lib/supabase.js';
 import GroupStageSection from '../components/GroupStageSection.jsx';
 import KnockoutSection from '../components/KnockoutSection.jsx';
@@ -13,15 +13,18 @@ export default function QuinielasPage({ session, userMeta }) {
   const [results, setResults] = useState({});
   const [confirmed, setConfirmed] = useState(false);
   const [activeGroup, setActiveGroup] = useState('A');
-  const [activePhase, setActivePhase] = useState('group');
-  const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState('group'); // 'group' | 'knockout' | 'bonus'
+  const [saveStatus, setSaveStatus] = useState({}); // matchId -> 'saving' | 'saved' | 'error'
+  const [tab, setTab] = useState('group');
   const allMatches = getAllGroupMatches();
+
+  // Always-current snapshot of picks, used to avoid stale-closure races
+  // when the user fills in home/away goals quickly back to back.
+  const picksRef = useRef({});
 
   useEffect(() => {
     if (!session) return;
     loadData();
-  }, [session]);
+  }, [session?.user?.id]);
 
   async function loadData() {
     const [userPicksData, userBonusData, challenges, realResults] = await Promise.all([
@@ -36,6 +39,7 @@ export default function QuinielasPage({ session, userMeta }) {
     const picksMap = {};
     for (const p of userPicksData.picks) picksMap[p.match_id] = p;
     setPicks(picksMap);
+    picksRef.current = picksMap;
 
     const koPicksMap = {};
     for (const p of userPicksData.koPicks) koPicksMap[p.match_id] = p;
@@ -51,24 +55,39 @@ export default function QuinielasPage({ session, userMeta }) {
     setResults(resultsMap);
   }
 
-  async function handlePickChange(matchId, homeGoals, awayGoals) {
+  // field is 'home_goals' or 'away_goals'
+  async function handlePickChange(matchId, field, value) {
     if (confirmed) return;
-    const newPicks = { ...picks, [matchId]: { match_id: matchId, home_goals: homeGoals, away_goals: awayGoals } };
-    setPicks(newPicks);
-    setSaving(true);
+
+    const current = picksRef.current[matchId] || { match_id: matchId, home_goals: null, away_goals: null };
+    const updated = { ...current, match_id: matchId, [field]: value };
+
+    // Update ref synchronously so the next rapid edit sees the latest value
+    picksRef.current = { ...picksRef.current, [matchId]: updated };
+    setPicks(prev => ({ ...prev, [matchId]: updated }));
+    setSaveStatus(prev => ({ ...prev, [matchId]: 'saving' }));
+
     try {
-      await savePick(session.user.id, matchId, homeGoals, awayGoals);
-    } catch (e) { console.error(e); }
-    setSaving(false);
+      await savePick(session.user.id, matchId, updated.home_goals, updated.away_goals);
+      setSaveStatus(prev => ({ ...prev, [matchId]: 'saved' }));
+    } catch (e) {
+      console.error('Error saving pick:', e);
+      setSaveStatus(prev => ({ ...prev, [matchId]: 'error' }));
+    }
   }
 
   async function handleKoPick(matchId, winner) {
     if (confirmed) return;
     const newKo = { ...koPicks, [matchId]: { match_id: matchId, winner } };
     setKoPicks(newKo);
+    setSaveStatus(prev => ({ ...prev, [matchId]: 'saving' }));
     try {
       await saveKnockoutPick(session.user.id, matchId, winner);
-    } catch (e) { console.error(e); }
+      setSaveStatus(prev => ({ ...prev, [matchId]: 'saved' }));
+    } catch (e) {
+      console.error('Error saving knockout pick:', e);
+      setSaveStatus(prev => ({ ...prev, [matchId]: 'error' }));
+    }
   }
 
   async function handleBonusPick(bonusId, value) {
@@ -82,7 +101,7 @@ export default function QuinielasPage({ session, userMeta }) {
 
   async function handleConfirm() {
     const totalMatches = allMatches.length;
-    const filledPicks = Object.values(picks).filter(p => p.home_goals !== null && p.away_goals !== null).length;
+    const filledPicks = Object.values(picksRef.current).filter(p => p.home_goals !== null && p.home_goals !== undefined && p.away_goals !== null && p.away_goals !== undefined).length;
     if (filledPicks < totalMatches) {
       alert(`Faltan ${totalMatches - filledPicks} partidos de fase de grupos por llenar.`);
       return;
@@ -92,35 +111,19 @@ export default function QuinielasPage({ session, userMeta }) {
     setConfirmed(true);
   }
 
-  // Compute group standings from user's own picks (for knockout bracket generation)
-  function getGroupStandingsFromPicks(groupId) {
-    const group = GROUPS[groupId];
-    const groupMatches = allMatches.filter(m => m.group === groupId);
-    const table = {};
-    for (const t of group.teams) table[t] = { team: t, pts: 0, gf: 0, ga: 0, gd: 0, played: 0 };
-
-    for (const match of groupMatches) {
-      const pick = picks[match.id];
-      if (!pick || pick.home_goals === null) continue;
-      const rh = Number(pick.home_goals), ra = Number(pick.away_goals);
-      table[match.home].played++; table[match.away].played++;
-      table[match.home].gf += rh; table[match.home].ga += ra;
-      table[match.away].gf += ra; table[match.away].ga += rh;
-      table[match.home].gd = table[match.home].gf - table[match.home].ga;
-      table[match.away].gd = table[match.away].gf - table[match.away].ga;
-      if (rh > ra) { table[match.home].pts += 3; }
-      else if (rh < ra) { table[match.away].pts += 3; }
-      else { table[match.home].pts++; table[match.away].pts++; }
-    }
-    return Object.values(table).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-  }
-
   const groupProgress = Object.keys(GROUPS).reduce((acc, gId) => {
     const groupMatches = allMatches.filter(m => m.group === gId);
-    const filled = groupMatches.filter(m => picks[m.id]?.home_goals !== null && picks[m.id]?.away_goals !== null).length;
+    const filled = groupMatches.filter(m => {
+      const p = picks[m.id];
+      return p?.home_goals !== null && p?.home_goals !== undefined && p?.away_goals !== null && p?.away_goals !== undefined;
+    }).length;
     acc[gId] = { filled, total: groupMatches.length };
     return acc;
   }, {});
+
+  // Any save currently in flight or failed?
+  const anySaving = Object.values(saveStatus).some(s => s === 'saving');
+  const anyError = Object.values(saveStatus).some(s => s === 'error');
 
   return (
     <div className="quiniela-page">
@@ -130,7 +133,9 @@ export default function QuinielasPage({ session, userMeta }) {
           <span className="confirmed-badge">✓ Quiniela confirmada</span>
         ) : (
           <div className="header-actions">
-            {saving && <span className="saving-indicator">Guardando...</span>}
+            {anySaving && <span className="saving-indicator">Guardando...</span>}
+            {!anySaving && anyError && <span className="saving-indicator error">⚠ Error al guardar, revisa tu conexión</span>}
+            {!anySaving && !anyError && Object.keys(saveStatus).length > 0 && <span className="saving-indicator ok">✓ Guardado</span>}
             <button className="btn-confirm" onClick={handleConfirm}>Confirmar quiniela</button>
           </div>
         )}
@@ -164,7 +169,7 @@ export default function QuinielasPage({ session, userMeta }) {
           groupProgress={groupProgress}
           allMatches={allMatches}
           onPickChange={handlePickChange}
-          getGroupStandingsFromPicks={getGroupStandingsFromPicks}
+          saveStatus={saveStatus}
         />
       )}
 
@@ -174,7 +179,6 @@ export default function QuinielasPage({ session, userMeta }) {
           picks={picks}
           confirmed={confirmed}
           onKoPick={handleKoPick}
-          getGroupStandingsFromPicks={getGroupStandingsFromPicks}
         />
       )}
 

@@ -1,4 +1,4 @@
-import { GROUPS, FLAGS, HOST_TEAMS, getAllGroupMatches, formatDate } from '../lib/worldcupData.js';
+import { GROUPS, FLAGS, HOST_TEAMS, formatDate } from '../lib/worldcupData.js';
 
 function ScoreInput({ value, onChange, disabled }) {
   return (
@@ -16,7 +16,7 @@ function ScoreInput({ value, onChange, disabled }) {
   );
 }
 
-function MatchRow({ match, pick, result, onPickChange, confirmed }) {
+function MatchRow({ match, pick, result, onPickChange, confirmed, saveState }) {
   const isHost = HOST_TEAMS.includes(match.home) || HOST_TEAMS.includes(match.away);
 
   function getMatchClass() {
@@ -35,14 +35,17 @@ function MatchRow({ match, pick, result, onPickChange, confirmed }) {
       <div className="match-meta">
         <span className="match-date">{formatDate(match.date)} {match.time && `· ${match.time}`}</span>
         <span className="match-venue">📍 {match.venue}</span>
+        {saveState === 'saving' && <span className="row-save-status saving">Guardando...</span>}
+        {saveState === 'saved' && <span className="row-save-status saved">✓ Guardado</span>}
+        {saveState === 'error' && <span className="row-save-status error">⚠ Error al guardar</span>}
       </div>
       <div className="match-body">
         {isHost && <span className="double-badge">×2</span>}
         <span className="team-name team-home">{FLAGS[match.home] || ''} {match.home}</span>
         <div className="score-area">
-          <ScoreInput value={pick?.home_goals} onChange={v => onPickChange(match.id, v, pick?.away_goals ?? null)} disabled={confirmed} />
+          <ScoreInput value={pick?.home_goals} onChange={v => onPickChange(match.id, 'home_goals', v)} disabled={confirmed} />
           <span className="score-sep">-</span>
-          <ScoreInput value={pick?.away_goals} onChange={v => onPickChange(match.id, pick?.home_goals ?? null, v)} disabled={confirmed} />
+          <ScoreInput value={pick?.away_goals} onChange={v => onPickChange(match.id, 'away_goals', v)} disabled={confirmed} />
         </div>
         <span className="team-name team-away">{match.away} {FLAGS[match.away] || ''}</span>
         {result && result.home_goals !== null && result.home_goals !== undefined && (
@@ -95,7 +98,7 @@ function GroupTable({ teams, groupId, allMatches, picks, results }) {
   );
 }
 
-export default function GroupStageSection({ picks, results, confirmed, activeGroup, setActiveGroup, groupProgress, allMatches, onPickChange }) {
+export default function GroupStageSection({ picks, results, confirmed, activeGroup, setActiveGroup, groupProgress, allMatches, onPickChange, saveStatus }) {
   const groupIds = Object.keys(GROUPS);
   return (
     <div className="group-stage-section">
@@ -124,7 +127,15 @@ export default function GroupStageSection({ picks, results, confirmed, activeGro
         </div>
         <div className="matches-list">
           {allMatches.filter(m => m.group === activeGroup).map(match => (
-            <MatchRow key={match.id} match={match} pick={picks[match.id]} result={results[match.id]} onPickChange={onPickChange} confirmed={confirmed} />
+            <MatchRow
+              key={match.id}
+              match={match}
+              pick={picks[match.id]}
+              result={results[match.id]}
+              onPickChange={onPickChange}
+              confirmed={confirmed}
+              saveState={saveStatus?.[match.id]}
+            />
           ))}
         </div>
         <GroupTable teams={GROUPS[activeGroup].teams} groupId={activeGroup} allMatches={allMatches} picks={picks} results={results} />

@@ -3,7 +3,7 @@ import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDou
 import { getAllGroupMatches } from '../lib/worldcupData.js';
 import { computeLeaderboard } from '../lib/scoring.js';
 
-export default function LeaderboardPage({ session, userMeta }) {
+export default function LeaderboardPage({ session }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { getAllGroupMatches, GROUPS, FLAGS, HOST_TEAMS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
+import { getAllGroupMatches, GROUPS, FLAGS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
 import { computeGroupTable } from '../lib/scoring.js';
-import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, getAllUserPicks, savePick, saveKnockoutPick, confirmQuiniela, unconfirmQuiniela, supabase } from '../lib/supabase.js';
+import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, savePick, confirmQuiniela, unconfirmQuiniela, supabase } from '../lib/supabase.js';
 
-// ─── ADMIN KNOCKOUT RESULTS ──────────────────────────────────────────────────
+// ─── ADMIN KNOCKOUT BRACKET (connected to real group results) ──────────────
 function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleToggleDouble, realResults }) {
   const [phase, setPhase] = useState('r32');
 
@@ -13,17 +13,13 @@ function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleTo
     await saveKnockoutResult(matchId, winner, phase);
   }
 
-  // Derive real group standings from admin-entered results
   function getRealGroupStanding(groupId, pos) {
     const group = GROUPS[groupId];
     const groupMatches = getAllGroupMatches().filter(m => m.group === groupId);
-    const resultsMap = {};
-    for (const r of realResults) resultsMap[r.match_id] = r;
-    const table = computeGroupTable(group.teams, groupMatches, Object.values(resultsMap));
+    const table = computeGroupTable(group.teams, groupMatches, realResults);
     return table[pos - 1]?.team || null;
   }
 
-  // Resolve real third places
   const realThirds = (() => {
     const picksFromResults = {};
     for (const r of realResults) {
@@ -57,7 +53,11 @@ function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleTo
     { id: 'r16', label: 'Octavos', fixtures: R16_BRACKET.map(m => ({ ...m, home: koResults[m.homeSource]?.winner || null, away: koResults[m.awaySource]?.winner || null })) },
     { id: 'qf',  label: 'Cuartos',  fixtures: QF_BRACKET.map(m => ({ ...m, home: koResults[m.homeSource]?.winner || null, away: koResults[m.awaySource]?.winner || null })) },
     { id: 'sf',  label: 'Semis',    fixtures: SF_BRACKET.map(m => ({ ...m, home: koResults[m.homeSource]?.winner || null, away: koResults[m.awaySource]?.winner || null })) },
-    { id: 'final', label: 'Final',  fixtures: [{ ...FINAL, home: koResults[FINAL.homeSource]?.winner || null, away: koResults[FINAL.awaySource]?.winner || null }, { ...THIRD_PLACE, home: koResults['sf_101']?.winner || null, away: koResults['sf_102']?.winner || null }] },
+    { id: 'final', label: 'Final',  fixtures: [
+        { ...FINAL, home: koResults[FINAL.homeSource]?.winner || null, away: koResults[FINAL.awaySource]?.winner || null },
+        { ...THIRD_PLACE, home: koResults['sf_101']?.winner || null, away: koResults['sf_102']?.winner || null }
+      ]
+    },
   ];
 
   const phaseData = phases.find(p => p.id === phase);
@@ -71,7 +71,6 @@ function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleTo
         {phaseData.fixtures.map(fix => {
           const result = koResults[fix.id];
           const isDouble = doubleMatches.includes(fix.id);
-          const teams = [fix.home, fix.away].filter(Boolean);
           return (
             <div key={fix.id} className={`admin-ko-match ${isDouble ? 'is-double' : ''}`}>
               <div className="match-meta">
@@ -79,11 +78,13 @@ function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleTo
                 <span className="match-venue">📍 {fix.venue}</span>
                 {fix.thirdLabel && <span className="third-note">3° grupos: {fix.thirdLabel}</span>}
               </div>
-              <div className="admin-ko-sources">
-                <span className="source-label">{fix.homeLabel || fix.homeSource}</span>
-                <span className="vs-label">vs</span>
-                <span className="source-label">{fix.awayLabel || fix.awaySource}</span>
-              </div>
+              {fix.homeLabel && (
+                <div className="admin-ko-sources">
+                  <span className="source-label">{fix.homeLabel}</span>
+                  <span className="vs-label">vs</span>
+                  <span className="source-label">{fix.awayLabel}</span>
+                </div>
+              )}
               <div className="admin-ko-teams">
                 {[fix.home, fix.away].map((team, i) => team && (
                   <button
@@ -109,21 +110,17 @@ function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleTo
 }
 
 // ─── ADMIN USER PICKS EDITOR ─────────────────────────────────────────────────
-function AdminUserEditor({ users, allMatches }) {
+function AdminUserEditor({ users, allMatches, onUserUpdated }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userPicks, setUserPicks] = useState({});
-  const [userKoPicks, setUserKoPicks] = useState({});
   const [saving, setSaving] = useState('');
   const [activeGroup, setActiveGroup] = useState('A');
 
   async function loadUserPicks(user) {
     setSelectedUser(user);
     const { data: picks } = await supabase.from('picks').select('*').eq('user_id', user.user_id);
-    const { data: koPicks } = await supabase.from('knockout_picks').select('*').eq('user_id', user.user_id);
     const pm = {}; for (const p of (picks || [])) pm[p.match_id] = p;
-    const km = {}; for (const p of (koPicks || [])) km[p.match_id] = p;
     setUserPicks(pm);
-    setUserKoPicks(km);
   }
 
   async function handleSavePick(matchId, homeGoals, awayGoals) {
@@ -139,7 +136,7 @@ function AdminUserEditor({ users, allMatches }) {
     if (!window.confirm(`¿Confirmar la quiniela de ${selectedUser.username}?`)) return;
     await confirmQuiniela(selectedUser.user_id);
     setSelectedUser(prev => ({ ...prev, confirmed: true }));
-    alert('Quiniela confirmada.');
+    onUserUpdated?.();
   }
 
   async function handleUnconfirm() {
@@ -147,7 +144,7 @@ function AdminUserEditor({ users, allMatches }) {
     if (!window.confirm(`¿Desconfirmar la quiniela de ${selectedUser.username}? Podrá editarla de nuevo.`)) return;
     await unconfirmQuiniela(selectedUser.user_id);
     setSelectedUser(prev => ({ ...prev, confirmed: false }));
-    alert('Quiniela desconfirmada. El usuario puede editarla de nuevo.');
+    onUserUpdated?.();
   }
 
   if (!selectedUser) {
@@ -336,7 +333,7 @@ export default function AdminPage() {
       {tab === 'knockout' && (
         <div className="admin-results">
           <h3>Bracket real de Eliminatorias</h3>
-          <p className="muted">Selecciona al ganador de cada partido conforme avance el torneo.</p>
+          <p className="muted">Selecciona al ganador de cada partido conforme avance el torneo. Los equipos se llenan automáticamente con los resultados reales de grupos que ingreses.</p>
           <AdminKnockoutBracket koResults={koResults} setKoResults={setKoResults} doubleMatches={doubleMatches} handleToggleDouble={handleToggleDouble} realResults={Object.values(results)} />
         </div>
       )}
@@ -385,7 +382,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {tab === 'users' && <AdminUserEditor users={users} allMatches={allMatches} />}
+      {tab === 'users' && <AdminUserEditor users={users} allMatches={allMatches} onUserUpdated={loadData} />}
     </div>
   );
 }

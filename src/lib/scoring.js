@@ -3,8 +3,8 @@ import { SCORING, HOST_TEAMS } from './worldcupData.js';
 // ─── GROUP STAGE SCORING ────────────────────────────────────────────────────
 
 export function scoreGroupMatch(pick, result, isDouble) {
-  if (!pick || result.home_goals === null || result.away_goals === null) return null;
-  if (pick.home_goals === null || pick.away_goals === null) return null;
+  if (!pick || result.home_goals === null || result.home_goals === undefined) return null;
+  if (pick.home_goals === null || pick.home_goals === undefined) return null;
 
   const ph = Number(pick.home_goals);
   const pa = Number(pick.away_goals);
@@ -15,13 +15,11 @@ export function scoreGroupMatch(pick, result, isDouble) {
   let exactHit = false;
   let correctWinner = false;
 
-  // Exact result
   if (ph === rh && pa === ra) {
     pts = SCORING.exactResult;
     exactHit = true;
     correctWinner = true;
   } else {
-    // Correct winner/draw
     const pickOutcome = ph > pa ? 'home' : ph < pa ? 'away' : 'draw';
     const realOutcome = rh > ra ? 'home' : rh < ra ? 'away' : 'draw';
     if (pickOutcome === realOutcome) {
@@ -32,22 +30,11 @@ export function scoreGroupMatch(pick, result, isDouble) {
 
   if (isDouble) pts *= SCORING.doubleMultiplier;
 
-  // Count correctly guessed goals
   let goalsHit = 0;
   if (ph === rh) goalsHit++;
   if (pa === ra) goalsHit++;
 
   return { pts, exactHit, correctWinner, goalsHit };
-}
-
-// ─── KNOCKOUT SCORING ────────────────────────────────────────────────────────
-
-export function scoreKnockoutMatch(pick, result, isDouble) {
-  if (!pick || !result) return null;
-  const correct = pick.winner === result.winner;
-  let pts = correct ? SCORING.correctWinner : 0;
-  if (isDouble) pts *= SCORING.doubleMultiplier;
-  return { pts, exactHit: correct, correctWinner: correct, goalsHit: 0 };
 }
 
 // ─── COMPUTE FULL LEADERBOARD ────────────────────────────────────────────────
@@ -133,7 +120,7 @@ export function computeGroupTable(groupTeams, matches, results) {
 
   for (const match of matches) {
     const result = results.find(r => r.match_id === match.id);
-    if (!result || result.home_goals === null) continue;
+    if (!result || result.home_goals === null || result.home_goals === undefined) continue;
 
     const rh = Number(result.home_goals);
     const ra = Number(result.away_goals);

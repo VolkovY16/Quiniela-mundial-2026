@@ -119,7 +119,6 @@ export function getAllGroupMatches() { return GROUP_MATCHES; }
 export function generateGroupMatches(group, groupId) { return GROUP_MATCHES.filter(m => m.group === groupId); }
 
 // ─── COMPUTE BEST THIRD PLACES ───────────────────────────────────────────────
-// Returns sorted array of {group, team, pts, gd, gf} for all 12 third-place teams
 export function computeThirdPlaces(picks) {
   const thirds = [];
   for (const [groupId, group] of Object.entries(GROUPS)) {
@@ -143,7 +142,6 @@ export function computeThirdPlaces(picks) {
     const sorted = Object.values(table).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
     if (sorted[2]) thirds.push(sorted[2]);
   }
-  // Sort: pts → gd → gf → fewer goals against → group letter (FIFA tiebreaker order)
   return thirds.sort((a, b) =>
     b.pts - a.pts ||
     b.gd - a.gd ||
@@ -153,26 +151,22 @@ export function computeThirdPlaces(picks) {
   );
 }
 
-// For each R32 match that needs a third place, which groups can provide it
-// Based on official FIFA 2026 bracket
 export const THIRD_PLACE_SLOTS = {
-  'r32_74': 'ABCDF',  // M74: E1 vs best 3rd of A/B/C/D/F
-  'r32_77': 'CDFGH',  // M77: I1 vs best 3rd of C/D/F/G/H
-  'r32_79': 'CEFHI',  // M79: A1 vs best 3rd of C/E/F/H/I
-  'r32_80': 'EHIJK',  // M80: L1 vs best 3rd of E/H/I/J/K
-  'r32_81': 'BEFIJ',  // M81: D1 vs best 3rd of B/E/F/I/J
-  'r32_82': 'AEHIJ',  // M82: G1 vs best 3rd of A/E/H/I/J
-  'r32_85': 'EFGIJ',  // M85: B1 vs best 3rd of E/F/G/I/J
-  'r32_87': 'DEIJL',  // M87: K1 vs best 3rd of D/E/I/J/L
+  'r32_74': 'ABCDF',
+  'r32_77': 'CDFGH',
+  'r32_79': 'CEFHI',
+  'r32_80': 'EHIJK',
+  'r32_81': 'BEFIJ',
+  'r32_82': 'AEHIJ',
+  'r32_85': 'EFGIJ',
+  'r32_87': 'DEIJL',
 };
 
-// Given all thirds sorted best-first, assign them to slots
 export function assignThirdsToSlots(sortedThirds) {
   const best8 = sortedThirds.slice(0, 8);
   const slots = Object.keys(THIRD_PLACE_SLOTS);
   const assigned = {};
 
-  // Use backtracking to find a valid assignment
   function backtrack(slotIdx, usedGroups) {
     if (slotIdx === slots.length) return true;
     const slot = slots[slotIdx];
