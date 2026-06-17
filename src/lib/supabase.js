@@ -77,8 +77,8 @@ export async function getUserPicks(userId) {
 
 export async function getAllUserPicks() {
   const [{ data: picks }, { data: koPicks }] = await Promise.all([
-    supabase.from('picks').select('*'),
-    supabase.from('knockout_picks').select('*'),
+    supabase.from('picks').select('*').limit(10000),
+    supabase.from('knockout_picks').select('*').limit(10000),
   ]);
   return { picks: picks || [], koPicks: koPicks || [] };
 }
