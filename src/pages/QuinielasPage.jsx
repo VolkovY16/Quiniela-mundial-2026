@@ -62,11 +62,16 @@ export default function QuinielasPage({ session, userMeta }) {
     const current = picksRef.current[matchId] || { match_id: matchId, home_goals: null, away_goals: null };
     const updated = { ...current, match_id: matchId, [field]: value };
 
-    // Update ref synchronously so the next rapid edit sees the latest value
+    // Update ref and UI synchronously so the next rapid edit sees the latest value
     picksRef.current = { ...picksRef.current, [matchId]: updated };
     setPicks(prev => ({ ...prev, [matchId]: updated }));
-    setSaveStatus(prev => ({ ...prev, [matchId]: 'saving' }));
 
+    // Only save to DB when BOTH goals are filled in — avoids saving partial picks
+    const homeOk = updated.home_goals !== null && updated.home_goals !== undefined && updated.home_goals !== '';
+    const awayOk = updated.away_goals !== null && updated.away_goals !== undefined && updated.away_goals !== '';
+    if (!homeOk || !awayOk) return;
+
+    setSaveStatus(prev => ({ ...prev, [matchId]: 'saving' }));
     try {
       await savePick(session.user.id, matchId, updated.home_goals, updated.away_goals);
       setSaveStatus(prev => ({ ...prev, [matchId]: 'saved' }));

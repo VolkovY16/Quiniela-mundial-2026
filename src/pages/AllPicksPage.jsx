@@ -64,8 +64,14 @@ export default function AllPicksPage() {
     matchesByDate[m.date].push(m);
   }
 
+  function isComplete(pick) {
+    return pick &&
+      pick.home_goals !== null && pick.home_goals !== undefined && pick.home_goals !== '' &&
+      pick.away_goals !== null && pick.away_goals !== undefined && pick.away_goals !== '';
+  }
+
   function cellClass(pick, result) {
-    if (!pick || pick.home_goals === null || pick.home_goals === undefined) return 'pp-empty';
+    if (!isComplete(pick)) return 'pp-empty';
     if (!result || result.home_goals === null || result.home_goals === undefined) return 'pp-pending';
     const scored = scoreGroupMatch(pick, result, false);
     if (!scored) return 'pp-pending';
@@ -75,8 +81,11 @@ export default function AllPicksPage() {
   }
 
   function cellText(pick) {
-    if (!pick || pick.home_goals === null || pick.home_goals === undefined) return '–';
-    return `${pick.home_goals}-${pick.away_goals}`;
+    if (!pick) return '–';
+    const h = pick.home_goals;
+    const a = pick.away_goals;
+    if ((h === null || h === undefined || h === '') && (a === null || a === undefined || a === '')) return '–';
+    return `${h ?? '?'}-${a ?? '?'}`;
   }
 
   if (loading) {
