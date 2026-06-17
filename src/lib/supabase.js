@@ -76,11 +76,29 @@ export async function getUserPicks(userId) {
 }
 
 export async function getAllUserPicks() {
-  const [{ data: picks }, { data: koPicks }] = await Promise.all([
-    supabase.from('picks').select('*').limit(10000),
-    supabase.from('knockout_picks').select('*').limit(10000),
+  // Fetch all picks using pagination to bypass Supabase's 1000-row default limit
+  async function fetchAll(table) {
+    const allRows = [];
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from(table)
+        .select('*')
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    return allRows;
+  }
+
+  const [picks, koPicks] = await Promise.all([
+    fetchAll('picks'),
+    fetchAll('knockout_picks'),
   ]);
-  return { picks: picks || [], koPicks: koPicks || [] };
+  return { picks, koPicks };
 }
 
 export async function saveBonusPick(userId, bonusId, value) {
