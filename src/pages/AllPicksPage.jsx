@@ -26,6 +26,10 @@ export default function AllPicksPage() {
       const sortedUsers = [...usersData].sort((a, b) => (a.username || '').localeCompare(b.username || ''));
       setUsers(sortedUsers);
 
+      console.log('Total picks recibidos:', picksData.picks.length);
+      const gisela = picksData.picks.filter(p => p.user_id === '0879050d-fd7c-48b4-91c4-ec37c8ca21a3');
+      console.log('Picks de Gisela:', gisela.length, gisela.map(p => p.match_id).sort());
+
       const byUser = {};
       for (const p of picksData.picks) {
         if (!byUser[p.user_id]) byUser[p.user_id] = {};
