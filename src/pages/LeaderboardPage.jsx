@@ -3,10 +3,14 @@ import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDou
 import { getAllGroupMatches, GROUPS } from '../lib/worldcupData.js';
 import { computeLeaderboard } from '../lib/scoring.js';
 
-export default function LeaderboardPage({ session }) {
+export default function LeaderboardPage({ session, userMeta }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [hiddenUsers, setHiddenUsers] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('hiddenUsers') || '[]'); } catch { return []; }
+  });
+  const isAdmin = userMeta?.is_admin === true;
 
   useEffect(() => {
     loadLeaderboard();
@@ -60,8 +64,17 @@ export default function LeaderboardPage({ session }) {
     }
   }
 
+  const visibleLeaderboard = leaderboard.filter(e => !hiddenUsers.includes(e.userId));
   const medals = ['🥇', '🥈', '🥉'];
-  const hasResults = leaderboard.some(e => e.totalPts > 0);
+  const hasResults = visibleLeaderboard.some(e => e.totalPts > 0);
+
+  function toggleHide(userId) {
+    setHiddenUsers(prev => {
+      const next = prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId];
+      localStorage.setItem('hiddenUsers', JSON.stringify(next));
+      return next;
+    });
+  }
 
   return (
     <div className="leaderboard-page">
@@ -85,13 +98,26 @@ export default function LeaderboardPage({ session }) {
         <span className="legend-item tiebreak">Desempate: exactos → goles</span>
       </div>
 
-      {!hasResults && leaderboard.length > 0 && (
+      {isAdmin && leaderboard.length > 0 && (
+        <div className="pp-hide-section">
+          <span className="pp-hide-label">👁 Ocultar de tabla:</span>
+          {leaderboard.map(e => (
+            <button key={e.userId}
+              className={`pp-hide-btn ${hiddenUsers.includes(e.userId) ? 'hidden' : ''}`}
+              onClick={() => toggleHide(e.userId)}>
+              {hiddenUsers.includes(e.userId) ? '＋' : '✕'} {e.username}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!hasResults && visibleLeaderboard.length > 0 && (
         <div className="leaderboard-notice">
           ⏳ El torneo aún no ha comenzado — los puntos se actualizarán cuando el admin ingrese resultados reales.
         </div>
       )}
 
-      {leaderboard.length === 0 && !loading ? (
+      {visibleLeaderboard.length === 0 && !loading ? (
         <div className="leaderboard-empty">
           <p>Aún no hay participantes registrados.</p>
         </div>
@@ -111,7 +137,7 @@ export default function LeaderboardPage({ session }) {
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((entry, i) => {
+              {visibleLeaderboard.map((entry, i) => {
                 const isMe = entry.userId === session?.user?.id;
                 return (
                   <tr key={entry.userId} className={`lb-row ${isMe ? 'lb-me' : ''} ${i < 3 && hasResults ? 'lb-podium' : ''}`}>
