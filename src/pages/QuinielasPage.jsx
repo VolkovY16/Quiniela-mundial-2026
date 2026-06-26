@@ -205,7 +205,7 @@ export default function QuinielasPage({ session, userMeta }) {
         <KnockoutSection
           koPicks={koPicks}
           picks={picks}
-          confirmed={confirmed}
+          confirmed={false}
           onKoPick={handleKoPick}
         />
       )}
