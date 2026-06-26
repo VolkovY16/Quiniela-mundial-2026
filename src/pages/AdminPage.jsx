@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getAllGroupMatches, GROUPS, FLAGS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
 import { computeGroupTable } from '../lib/scoring.js';
-import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, savePick, confirmQuiniela, unconfirmQuiniela, supabase } from '../lib/supabase.js';
+import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, savePick, confirmQuiniela, unconfirmQuiniela, getGroupStandings, saveGroupStanding, supabase } from '../lib/supabase.js';
 
 // ─── ADMIN KNOCKOUT BRACKET (connected to real group results) ──────────────
 function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleToggleDouble, realResults }) {
@@ -114,6 +114,7 @@ function AdminUserEditor({ users, allMatches, onUserUpdated }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userPicks, setUserPicks] = useState({});
   const [saving, setSaving] = useState('');
+  const [groupStandings, setGroupStandings] = useState({});
   const [activeGroup, setActiveGroup] = useState('A');
 
   async function loadUserPicks(user) {
@@ -216,6 +217,127 @@ function AdminUserEditor({ users, allMatches, onUserUpdated }) {
   );
 }
 
+
+// ─── ADMIN GROUP STANDINGS ────────────────────────────────────────────────────
+function AdminGroupStandings({ groupStandings, setGroupStandings, results, allMatches }) {
+  const [activeGroup, setActiveGroup] = useState('A');
+  const [localOrder, setLocalOrder] = useState({});
+  const [saving, setSaving] = useState('');
+
+  // Auto-compute from real results when switching groups
+  function getComputedOrder(groupId) {
+    const group = GROUPS[groupId];
+    const matches = allMatches.filter(m => m.group === groupId);
+    const table = computeGroupTable(group.teams, matches, Object.values(results));
+    return table.map(r => r.team);
+  }
+
+  function getOrder(groupId) {
+    if (localOrder[groupId]) return localOrder[groupId];
+    const existing = groupStandings[groupId];
+    if (existing) return [existing.pos1, existing.pos2, existing.pos3, existing.pos4];
+    return getComputedOrder(groupId);
+  }
+
+  function moveTeam(groupId, fromIdx, toIdx) {
+    const order = [...getOrder(groupId)];
+    const [moved] = order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, moved);
+    setLocalOrder(prev => ({ ...prev, [groupId]: order }));
+  }
+
+  async function handleConfirm(groupId) {
+    const order = getOrder(groupId);
+    if (order.length < 4) return;
+    setSaving(groupId);
+    try {
+      await saveGroupStanding(groupId, order[0], order[1], order[2], order[3]);
+      setGroupStandings(prev => ({
+        ...prev,
+        [groupId]: { group_id: groupId, pos1: order[0], pos2: order[1], pos3: order[2], pos4: order[3], confirmed: true }
+      }));
+      alert(`Grupo ${groupId} confirmado. Los puntos se actualizaron.`);
+    } catch (e) {
+      alert('Error al confirmar: ' + e.message);
+    }
+    setSaving('');
+  }
+
+  const order = getOrder(activeGroup);
+  const confirmed = groupStandings[activeGroup]?.confirmed;
+  const confirmedCount = Object.values(groupStandings).filter(s => s.confirmed).length;
+
+  return (
+    <div className="admin-standings">
+      <div className="admin-standings-header">
+        <h3>Tablas de Grupos — Resultados Reales</h3>
+        <p className="muted">Define el orden real de clasificación de cada grupo. Al confirmar, se otorgan los puntos a los usuarios que acertaron las posiciones.</p>
+        <span className="standings-progress">{confirmedCount}/12 grupos confirmados</span>
+      </div>
+
+      <div className="admin-group-tabs">
+        {Object.keys(GROUPS).map(gId => (
+          <button
+            key={gId}
+            className={`group-tab ${activeGroup === gId ? 'active' : ''} ${groupStandings[gId]?.confirmed ? 'done' : ''}`}
+            onClick={() => setActiveGroup(gId)}
+          >
+            {gId}
+            {groupStandings[gId]?.confirmed && <span style={{marginLeft:'4px'}}>✓</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="admin-standings-editor">
+        <div className="standings-editor-info">
+          <h4>{GROUPS[activeGroup].name}</h4>
+          <p className="muted">Arrastra o usa las flechas para ordenar. El orden calculado de tus resultados reales se pre-llena automáticamente.</p>
+        </div>
+
+        <div className="standings-order-list">
+          {order.map((team, i) => (
+            <div key={team} className="standings-order-row">
+              <span className="standings-pos">{i + 1}°</span>
+              <span className="standings-team">{FLAGS[team] || ''} {team}</span>
+              <div className="standings-arrows">
+                <button disabled={i === 0 || confirmed} onClick={() => moveTeam(activeGroup, i, i - 1)}>▲</button>
+                <button disabled={i === order.length - 1 || confirmed} onClick={() => moveTeam(activeGroup, i, i + 1)}>▼</button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="standings-actions">
+          {confirmed ? (
+            <div className="standings-confirmed-msg">
+              ✓ Grupo {activeGroup} confirmado — puntos otorgados
+              <button className="btn-unconfirm" style={{marginLeft:'1rem', fontSize:'0.8rem'}} onClick={async () => {
+                await supabase.from('group_standings').update({confirmed: false}).eq('group_id', activeGroup);
+                setGroupStandings(prev => ({...prev, [activeGroup]: {...prev[activeGroup], confirmed: false}}));
+              }}>Desconfirmar</button>
+            </div>
+          ) : (
+            <button
+              className="btn-confirm-admin"
+              style={{padding:'0.7rem 1.5rem', fontSize:'1rem'}}
+              disabled={saving === activeGroup}
+              onClick={() => handleConfirm(activeGroup)}
+            >
+              {saving === activeGroup ? 'Confirmando...' : `✓ Confirmar Grupo ${activeGroup}`}
+            </button>
+          )}
+        </div>
+
+        <div className="standings-auto-hint">
+          <button className="btn-toggle" onClick={() => setLocalOrder(prev => ({...prev, [activeGroup]: getComputedOrder(activeGroup)}))}>
+            🔄 Recalcular desde resultados reales
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN ADMIN PAGE ─────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [tab, setTab] = useState('results');
@@ -225,18 +347,23 @@ export default function AdminPage() {
   const [bonusChallenges, setBonusChallenges] = useState([]);
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState('');
+  const [groupStandings, setGroupStandings] = useState({});
   const [activeGroup, setActiveGroup] = useState('A');
   const allMatches = getAllGroupMatches();
 
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    const [res, doubles, challenges, usersData] = await Promise.all([
+    const [res, doubles, challenges, usersData, standings] = await Promise.all([
       getAllResults(),
       getDoubleMatches(),
       getBonusChallenges(),
       getAllUsers(),
+      getGroupStandings(),
     ]);
+    const standingsMap = {};
+    for (const s of standings) standingsMap[s.group_id] = s;
+    setGroupStandings(standingsMap);
     const resMap = {}; for (const r of res.results) resMap[r.match_id] = r;
     setResults(resMap);
     const koMap = {}; for (const r of res.koResults) koMap[r.match_id] = r;
@@ -293,6 +420,7 @@ export default function AdminPage() {
           { id: 'double',     label: '×2 Partidos Dobles' },
           { id: 'bonus',      label: '🎯 Bonus' },
           { id: 'users',      label: '👥 Editar Quinielas' },
+          { id: 'standings',  label: '📋 Tablas de Grupos' },
         ].map(t => <button key={t.id} className={`admin-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>)}
       </div>
 
@@ -383,6 +511,15 @@ export default function AdminPage() {
       )}
 
       {tab === 'users' && <AdminUserEditor users={users} allMatches={allMatches} onUserUpdated={loadData} />}
+
+      {tab === 'standings' && (
+        <AdminGroupStandings
+          groupStandings={groupStandings}
+          setGroupStandings={setGroupStandings}
+          results={results}
+          allMatches={allMatches}
+        />
+      )}
     </div>
   );
 }

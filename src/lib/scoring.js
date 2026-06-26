@@ -39,7 +39,7 @@ export function scoreGroupMatch(pick, result, isDouble) {
 
 // ─── COMPUTE FULL LEADERBOARD ────────────────────────────────────────────────
 
-export function computeLeaderboard({ users, allPicks, allKoPicks, results, koResults, bonusChallenges, bonusPicks, doubleMatches, groupMatches }) {
+export function computeLeaderboard({ users, allPicks, allKoPicks, results, koResults, bonusChallenges, bonusPicks, doubleMatches, groupMatches, groupStandings, groups }) {
   return users.map(user => {
     const uid = user.user_id;
     const userPicks = allPicks.filter(p => p.user_id === uid);
@@ -93,6 +93,15 @@ export function computeLeaderboard({ users, allPicks, allKoPicks, results, koRes
       }
     }
 
+    // Standing points
+    let standingPts = 0;
+    if (groupStandings && groups) {
+      const picksMap = {};
+      for (const p of userPicks) picksMap[p.match_id] = p;
+      standingPts = computeStandingPoints(picksMap, groupStandings, groupMatches, groups);
+      totalPts += standingPts;
+    }
+
     return {
       userId: uid,
       username: user.username || uid,
@@ -102,6 +111,7 @@ export function computeLeaderboard({ users, allPicks, allKoPicks, results, koRes
       correctWinners,
       totalGoalsHit,
       bonusPts,
+      standingPts,
     };
   }).sort((a, b) => {
     if (b.totalPts !== a.totalPts) return b.totalPts - a.totalPts;
@@ -144,4 +154,38 @@ export function computeGroupTable(groupTeams, matches, results) {
     if (b.gd !== a.gd) return b.gd - a.gd;
     return b.gf - a.gf;
   });
+}
+
+// ─── GROUP STANDINGS SCORING ─────────────────────────────────────────────────
+
+// Compare user's computed group table vs real standing
+// Returns { pts, positions: [{team, userPos, realPos, correct}] }
+export function scoreGroupStanding(userTable, realStanding) {
+  if (!realStanding || !realStanding.confirmed) return { pts: 0, positions: [] };
+
+  const realOrder = [realStanding.pos1, realStanding.pos2, realStanding.pos3, realStanding.pos4];
+  const userOrder = userTable.map(r => r.team);
+
+  let pts = 0;
+  const positions = realOrder.map((realTeam, i) => {
+    const correct = userOrder[i] === realTeam;
+    if (correct) pts++;
+    return { team: realTeam, userTeam: userOrder[i], pos: i + 1, correct };
+  });
+
+  return { pts, positions };
+}
+
+// Compute total standing points for a user across all groups
+export function computeStandingPoints(picks, groupStandings, groupMatches, groups) {
+  let total = 0;
+  for (const [groupId, group] of Object.entries(groups)) {
+    const standing = groupStandings.find(s => s.group_id === groupId);
+    if (!standing || !standing.confirmed) continue;
+    const matches = groupMatches.filter(m => m.group === groupId);
+    const userTable = computeGroupTable(group.teams, matches, Object.values(picks).filter(p => matches.find(m => m.id === p.match_id)));
+    const { pts } = scoreGroupStanding(userTable, standing);
+    total += pts;
+  }
+  return total;
 }

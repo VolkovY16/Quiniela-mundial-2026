@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { GROUPS, getAllGroupMatches } from '../lib/worldcupData.js';
-import { savePick, saveKnockoutPick, getUserPicks, getUserBonusPicks, saveBonusPick, confirmQuiniela, getUserMeta, getBonusChallenges, getAllResults } from '../lib/supabase.js';
+import { savePick, saveKnockoutPick, getUserPicks, getUserBonusPicks, saveBonusPick, confirmQuiniela, getUserMeta, getBonusChallenges, getAllResults, getGroupStandings } from '../lib/supabase.js';
 import GroupStageSection from '../components/GroupStageSection.jsx';
+import GroupTablesSection from '../components/GroupTablesSection.jsx';
 import KnockoutSection from '../components/KnockoutSection.jsx';
 import BonusSection from '../components/BonusSection.jsx';
 
@@ -14,6 +15,7 @@ export default function QuinielasPage({ session, userMeta }) {
   const [confirmed, setConfirmed] = useState(false);
   const [activeGroup, setActiveGroup] = useState('A');
   const [saveStatus, setSaveStatus] = useState({}); // matchId -> 'saving' | 'saved' | 'error'
+  const [groupStandings, setGroupStandings] = useState([]);
   const [tab, setTab] = useState('group');
   const allMatches = getAllGroupMatches();
 
@@ -27,12 +29,14 @@ export default function QuinielasPage({ session, userMeta }) {
   }, [session?.user?.id]);
 
   async function loadData() {
-    const [userPicksData, userBonusData, challenges, realResults] = await Promise.all([
+    const [userPicksData, userBonusData, challenges, realResults, standings] = await Promise.all([
       getUserPicks(session.user.id),
       getUserBonusPicks(session.user.id),
       getBonusChallenges(),
       getAllResults(),
+      getGroupStandings(),
     ]);
+    setGroupStandings(standings);
     const meta = await getUserMeta(session.user.id);
     setConfirmed(meta?.confirmed || false);
 
@@ -162,6 +166,9 @@ export default function QuinielasPage({ session, userMeta }) {
         <button className={tab === 'bonus' ? 'phase-tab active' : 'phase-tab'} onClick={() => setTab('bonus')}>
           Retos Bonus
         </button>
+        <button className={tab === 'tables' ? 'phase-tab active' : 'phase-tab'} onClick={() => setTab('tables')}>
+          Tablas
+        </button>
       </div>
 
       {tab === 'group' && (
@@ -184,6 +191,14 @@ export default function QuinielasPage({ session, userMeta }) {
           picks={picks}
           confirmed={confirmed}
           onKoPick={handleKoPick}
+        />
+      )}
+
+      {tab === 'tables' && (
+        <GroupTablesSection
+          picks={picks}
+          allMatches={allMatches}
+          groupStandings={groupStandings}
         />
       )}
 

@@ -217,3 +217,21 @@ export function subscribeToResults(callback) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bonus_challenges' }, callback)
     .subscribe();
 }
+
+// ─── GROUP STANDINGS (admin) ─────────────────────────────────────────────────
+
+export async function saveGroupStanding(groupId, pos1, pos2, pos3, pos4) {
+  const { error } = await supabase.from('group_standings').upsert({
+    group_id: groupId,
+    pos1, pos2, pos3, pos4,
+    confirmed: true,
+    confirmed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'group_id' });
+  if (error) throw error;
+}
+
+export async function getGroupStandings() {
+  const { data } = await supabase.from('group_standings').select('*');
+  return data || [];
+}

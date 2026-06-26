@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDoubleMatches, supabase } from '../lib/supabase.js';
-import { getAllGroupMatches } from '../lib/worldcupData.js';
+import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDoubleMatches, getGroupStandings, supabase } from '../lib/supabase.js';
+import { getAllGroupMatches, GROUPS } from '../lib/worldcupData.js';
 import { computeLeaderboard } from '../lib/scoring.js';
 
 export default function LeaderboardPage({ session }) {
@@ -25,12 +25,13 @@ export default function LeaderboardPage({ session }) {
   async function loadLeaderboard() {
     setLoading(true);
     try {
-      const [usersData, picksData, resultsData, challenges, doubles] = await Promise.all([
+      const [usersData, picksData, resultsData, challenges, doubles, standings] = await Promise.all([
         getAllUsers(),
         getAllUserPicks(),
         getAllResults(),
         getBonusChallenges(),
         getDoubleMatches(),
+        getGroupStandings(),
       ]);
 
       const { data: bonusPicksData } = await supabase.from('bonus_picks').select('*');
@@ -46,6 +47,8 @@ export default function LeaderboardPage({ session }) {
         bonusPicks: bonusPicksData || [],
         doubleMatches: doubles,
         groupMatches,
+        groupStandings: standings,
+        groups: GROUPS,
       });
 
       setLeaderboard(board);
@@ -104,6 +107,7 @@ export default function LeaderboardPage({ session }) {
                 <th title="Ganadores acertados">✓</th>
                 <th title="Goles acertados">⚽</th>
                 <th title="Puntos de retos bonus">🎯</th>
+                <th title="Equipos en posición correcta">E</th>
               </tr>
             </thead>
             <tbody>
@@ -127,6 +131,7 @@ export default function LeaderboardPage({ session }) {
                     <td className="lb-winners">{entry.correctWinners}</td>
                     <td className="lb-goals">{entry.totalGoalsHit}</td>
                     <td className="lb-bonus">{entry.bonusPts > 0 ? `+${entry.bonusPts}` : '-'}</td>
+                    <td className="lb-standing">{entry.standingPts > 0 ? `+${entry.standingPts}` : '-'}</td>
                   </tr>
                 );
               })}
