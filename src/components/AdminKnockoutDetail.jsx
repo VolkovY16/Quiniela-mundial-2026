@@ -4,14 +4,13 @@ import { saveKoDetailResult, toggleKoFreeze } from '../lib/supabase.js';
 import { computeGroupTable } from '../lib/scoring.js';
 
 const PHASES = [
-  { id: 'r32', label: 'R32 · Dieciseisavos', matches: R32_BRACKET },
-  { id: 'r16', label: 'R16 · Octavos', matches: R16_BRACKET },
-  { id: 'qf',  label: 'QF · Cuartos', matches: QF_BRACKET },
-  { id: 'sf',  label: 'SF · Semis', matches: SF_BRACKET },
-  { id: 'final', label: 'Final', matches: [FINAL, THIRD_PLACE] },
+  { id: 'r32',   label: 'R32 · Dieciseisavos', matches: R32_BRACKET },
+  { id: 'r16',   label: 'R16 · Octavos',       matches: R16_BRACKET },
+  { id: 'qf',    label: 'QF · Cuartos',         matches: QF_BRACKET },
+  { id: 'sf',    label: 'SF · Semis',           matches: SF_BRACKET },
+  { id: 'final', label: 'Final',                matches: [FINAL, THIRD_PLACE] },
 ];
 
-// All 48 teams for autocomplete
 const ALL_TEAMS = [
   'México','Sudáfrica','Corea del Sur','República Checa',
   'Canadá','Bosnia y Herzegovina','Qatar','Suiza',
@@ -29,7 +28,9 @@ const ALL_TEAMS = [
 
 function TeamInput({ value, onChange, placeholder, disabled }) {
   const [show, setShow] = useState(false);
-  const filtered = ALL_TEAMS.filter(t => t.toLowerCase().includes((value || '').toLowerCase()) && t !== value);
+  const filtered = value
+    ? ALL_TEAMS.filter(t => t.toLowerCase().includes(value.toLowerCase()) && t !== value)
+    : [];
 
   return (
     <div className="team-autocomplete">
@@ -39,17 +40,18 @@ function TeamInput({ value, onChange, placeholder, disabled }) {
           type="text"
           className="team-text-input"
           value={value || ''}
-          placeholder={placeholder}
+          placeholder={placeholder || 'Selección...'}
           disabled={disabled}
           onChange={e => { onChange(e.target.value); setShow(true); }}
           onFocus={() => setShow(true)}
           onBlur={() => setTimeout(() => setShow(false), 200)}
         />
       </div>
-      {show && filtered.length > 0 && value && (
+      {show && filtered.length > 0 && (
         <div className="team-dropdown">
           {filtered.slice(0, 6).map(t => (
-            <button key={t} className="team-dropdown-item" onMouseDown={() => { onChange(t); setShow(false); }}>
+            <button key={t} className="team-dropdown-item"
+              onMouseDown={() => { onChange(t); setShow(false); }}>
               {FLAGS[t] || '🏳️'} {t}
             </button>
           ))}
@@ -61,15 +63,16 @@ function TeamInput({ value, onChange, placeholder, disabled }) {
 
 export default function AdminKnockoutDetail({ koResults, setKoResults, groupResults, allMatches }) {
   const [activePhase, setActivePhase] = useState('r32');
-  const [saving, setSaving] = useState('');
   const [localData, setLocalData] = useState({});
+  const [saving, setSaving] = useState('');
 
-  // Initialize localData from koResults
   useEffect(() => {
-    setLocalData({ ...koResults });
-  }, []);
+    // Initialize local data from saved results
+    const init = {};
+    for (const [k, v] of Object.entries(koResults)) init[k] = { ...v };
+    setLocalData(init);
+  }, [koResults]);
 
-  // Auto-suggest teams from real group results
   function autoTeam(source) {
     if (!source) return '';
     const gMatch = source.match(/^([A-L])([12])$/);
@@ -82,16 +85,16 @@ export default function AdminKnockoutDetail({ koResults, setKoResults, groupResu
     return koResults[source]?.winner || '';
   }
 
-  function getLocal(matchId) {
-    return localData[matchId] || koResults[matchId] || {};
+  function get(matchId) {
+    return localData[matchId] || {};
   }
 
-  function updateLocal(matchId, field, value) {
-    setLocalData(prev => ({ ...prev, [matchId]: { ...prev[matchId], match_id: matchId, [field]: value } }));
+  function set(matchId, field, value) {
+    setLocalData(prev => ({ ...prev, [matchId]: { ...prev[matchId], [field]: value } }));
   }
 
-  async function handleSaveMatch(matchId) {
-    const d = getLocal(matchId);
+  async function handleSave(matchId) {
+    const d = get(matchId);
     setSaving(matchId);
     try {
       await saveKoDetailResult(
@@ -105,16 +108,17 @@ export default function AdminKnockoutDetail({ koResults, setKoResults, groupResu
       );
       setKoResults(prev => ({ ...prev, [matchId]: { ...prev[matchId], ...d } }));
     } catch (e) {
-      alert('Error al guardar: ' + e.message);
+      alert('Error: ' + e.message);
     }
     setSaving('');
   }
 
   async function handleFreeze(matchId) {
-    const current = koResults[matchId] || {};
-    const newFrozen = !current.frozen;
-    setKoResults(prev => ({ ...prev, [matchId]: { ...prev[matchId], frozen: newFrozen } }));
+    const cur = koResults[matchId] || {};
+    const newFrozen = !cur.frozen;
     await toggleKoFreeze(matchId, newFrozen);
+    setKoResults(prev => ({ ...prev, [matchId]: { ...prev[matchId], frozen: newFrozen } }));
+    setLocalData(prev => ({ ...prev, [matchId]: { ...prev[matchId], frozen: newFrozen } }));
   }
 
   const phaseData = PHASES.find(p => p.id === activePhase);
@@ -122,111 +126,128 @@ export default function AdminKnockoutDetail({ koResults, setKoResults, groupResu
   return (
     <div className="admin-ko-detail">
       <div className="admin-ko-detail-header">
-        <h3>Bracket de Eliminatorias — Admin</h3>
-        <p className="muted">Define los equipos, marcadores y ganadores. Puedes escribir el nombre del equipo o elegirlo de la lista. Usa 💾 para guardar cada partido y 🔒 para congelarlo.</p>
+        <h3>Bracket Eliminatorias — Admin</h3>
+        <p className="muted">
+          <strong>Paso 1:</strong> Define los equipos de cada partido → los usuarios podrán llenar su predicción.<br/>
+          <strong>Paso 2:</strong> Después del partido, ingresa el resultado real → se otorgan los puntos.
+        </p>
       </div>
 
-      <div className="admin-group-tabs" style={{flexWrap:'wrap'}}>
+      <div className="admin-group-tabs">
         {PHASES.map(p => (
-          <button key={p.id} className={`group-tab ${activePhase === p.id ? 'active' : ''}`} onClick={() => setActivePhase(p.id)}>
-            {p.label}
-          </button>
+          <button key={p.id} className={`group-tab ${activePhase === p.id ? 'active' : ''}`}
+            onClick={() => setActivePhase(p.id)}>{p.label}</button>
         ))}
       </div>
 
       <div className="admin-ko-matches">
         {phaseData.matches.map(match => {
-          const d = getLocal(match.id);
+          const d = get(match.id);
           const saved = koResults[match.id] || {};
           const frozen = saved.frozen || false;
           const isSaving = saving === match.id;
-
-          // Auto-suggest if empty
-          const suggestedHome = autoTeam(match.homeSource);
-          const suggestedAway = match.awaySource ? autoTeam(match.awaySource) : '';
+          const sugHome = autoTeam(match.homeSource);
+          const sugAway = match.awaySource ? autoTeam(match.awaySource) : '';
 
           return (
             <div key={match.id} className={`admin-ko-detail-card ${frozen ? 'ko-frozen' : ''}`}>
+              {/* Header */}
               <div className="admin-ko-detail-header-row">
-                <span className="ko-match-num">M{match.matchNum} · {formatDate(match.date)}</span>
+                <div>
+                  <span className="ko-match-num">M{match.matchNum}</span>
+                  <span className="ko-match-date"> · {formatDate(match.date)}</span>
+                </div>
                 <button className={`btn-freeze ${frozen ? 'frozen' : ''}`} onClick={() => handleFreeze(match.id)}>
-                  {frozen ? '🔒' : '🔓'}
+                  {frozen ? '🔒 Congelado' : '🔓 Congelar'}
                 </button>
               </div>
 
               <div className="admin-ko-detail-body">
-                {/* HOME TEAM */}
-                <div className="admin-ko-team-section">
-                  <label className="admin-ko-field-label">Local {suggestedHome && !d.home_team && <span className="auto-suggest" onClick={() => updateLocal(match.id, 'home_team', suggestedHome)}>→ {suggestedHome}</span>}</label>
-                  <TeamInput
-                    value={d.home_team || ''}
-                    onChange={v => updateLocal(match.id, 'home_team', v)}
-                    placeholder={suggestedHome || 'Selección local...'}
-                    disabled={frozen}
-                  />
-                  <input type="number" min="0" max="20" className="admin-score-input" style={{width:'60px', marginTop:'0.3rem'}}
-                    value={d.home_goals ?? ''} placeholder="Goles"
-                    onChange={e => updateLocal(match.id, 'home_goals', e.target.value === '' ? null : Number(e.target.value))}
-                    disabled={frozen}
-                  />
-                </div>
 
-                <div className="admin-ko-vs-row">
-                  <span className="muted">vs</span>
-                  <label className="admin-ko-penalties">
-                    <input type="checkbox" checked={!!d.penalties}
-                      onChange={e => updateLocal(match.id, 'penalties', e.target.checked)}
-                      disabled={frozen}
-                    />
-                    Penales
-                  </label>
-                </div>
+                {/* ── STEP 1: TEAMS ── */}
+                <div className="admin-ko-step">
+                  <div className="admin-ko-step-label">1 · Equipos</div>
 
-                {/* AWAY TEAM */}
-                <div className="admin-ko-team-section">
-                  <label className="admin-ko-field-label">Visitante {suggestedAway && !d.away_team && <span className="auto-suggest" onClick={() => updateLocal(match.id, 'away_team', suggestedAway)}>→ {suggestedAway}</span>}</label>
-                  <TeamInput
-                    value={d.away_team || ''}
-                    onChange={v => updateLocal(match.id, 'away_team', v)}
-                    placeholder={suggestedAway || 'Selección visitante...'}
-                    disabled={frozen}
-                  />
-                  <input type="number" min="0" max="20" className="admin-score-input" style={{width:'60px', marginTop:'0.3rem'}}
-                    value={d.away_goals ?? ''} placeholder="Goles"
-                    onChange={e => updateLocal(match.id, 'away_goals', e.target.value === '' ? null : Number(e.target.value))}
-                    disabled={frozen}
-                  />
-                </div>
-
-                {/* WINNER */}
-                {(d.home_team || saved.home_team) && (d.away_team || saved.away_team) && (
-                  <div className="admin-ko-winner-row">
-                    <span className="muted" style={{fontSize:'0.8rem'}}>Avanza:</span>
-                    {[d.home_team || saved.home_team, d.away_team || saved.away_team].map(team => (
-                      <button key={team}
-                        className={`admin-ko-winner-btn ${d.winner === team ? 'selected' : ''}`}
-                        onClick={() => updateLocal(match.id, 'winner', team)}
-                        disabled={frozen}
-                      >
-                        {FLAGS[team] || ''} {team}
-                      </button>
-                    ))}
+                  <div className="admin-ko-team-row-labeled">
+                    <span className="admin-side-label">Local</span>
+                    <div style={{flex:1}}>
+                      {sugHome && !d.home_team && (
+                        <button className="auto-suggest-btn" onClick={() => set(match.id, 'home_team', sugHome)}>
+                          → Usar {FLAGS[sugHome]} {sugHome}
+                        </button>
+                      )}
+                      <TeamInput value={d.home_team || ''} onChange={v => set(match.id, 'home_team', v)} disabled={frozen} />
+                    </div>
                   </div>
-                )}
+
+                  <div className="admin-ko-team-row-labeled">
+                    <span className="admin-side-label">Visit.</span>
+                    <div style={{flex:1}}>
+                      {sugAway && !d.away_team && (
+                        <button className="auto-suggest-btn" onClick={() => set(match.id, 'away_team', sugAway)}>
+                          → Usar {FLAGS[sugAway]} {sugAway}
+                        </button>
+                      )}
+                      <TeamInput value={d.away_team || ''} onChange={v => set(match.id, 'away_team', v)} disabled={frozen} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── STEP 2: RESULT ── */}
+                <div className="admin-ko-step">
+                  <div className="admin-ko-step-label">2 · Resultado real (después del partido)</div>
+
+                  <div className="admin-ko-score-section">
+                    <div className="admin-ko-score-row">
+                      <span className="admin-score-team">{FLAGS[d.home_team || ''] || '🏳️'} {d.home_team || 'Local'}</span>
+                      <input type="number" min="0" max="20" className="admin-score-input"
+                        value={d.home_goals ?? ''} placeholder="-"
+                        onChange={e => set(match.id, 'home_goals', e.target.value === '' ? null : Number(e.target.value))}
+                        disabled={frozen}
+                      />
+                    </div>
+                    <div className="admin-ko-score-row">
+                      <span className="admin-score-team">{FLAGS[d.away_team || ''] || '🏳️'} {d.away_team || 'Visitante'}</span>
+                      <input type="number" min="0" max="20" className="admin-score-input"
+                        value={d.away_goals ?? ''} placeholder="-"
+                        onChange={e => set(match.id, 'away_goals', e.target.value === '' ? null : Number(e.target.value))}
+                        disabled={frozen}
+                      />
+                    </div>
+                    <label className="admin-ko-penalties">
+                      <input type="checkbox" checked={!!d.penalties}
+                        onChange={e => set(match.id, 'penalties', e.target.checked)} disabled={frozen} />
+                      Fueron a penales
+                    </label>
+                  </div>
+
+                  {/* WINNER */}
+                  {(d.home_team || d.away_team) && (
+                    <div className="admin-ko-winner-row">
+                      <span className="muted" style={{fontSize:'0.78rem'}}>Equipo que avanza:</span>
+                      {[d.home_team, d.away_team].filter(Boolean).map(team => (
+                        <button key={team}
+                          className={`admin-ko-winner-btn ${d.winner === team ? 'selected' : ''}`}
+                          onClick={() => set(match.id, 'winner', d.winner === team ? null : team)}
+                          disabled={frozen}>
+                          {FLAGS[team] || ''} {team}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* SAVE BUTTON */}
-                <button
-                  className="btn-save-ko"
-                  onClick={() => handleSaveMatch(match.id)}
-                  disabled={isSaving || frozen}
-                >
-                  {isSaving ? 'Guardando...' : '💾 Guardar partido'}
+                <button className="btn-save-ko" onClick={() => handleSave(match.id)} disabled={isSaving || frozen}>
+                  {isSaving ? 'Guardando...' : '💾 Guardar'}
                 </button>
 
+                {/* SAVED STATUS */}
                 {saved.home_team && (
                   <div className="admin-ko-saved-status">
-                    ✓ Guardado: {FLAGS[saved.home_team]} {saved.home_team} vs {FLAGS[saved.away_team]} {saved.away_team}
-                    {saved.winner && <> · Avanza: <strong>{saved.winner}</strong></>}
+                    ✓ {FLAGS[saved.home_team] || ''} {saved.home_team} vs {FLAGS[saved.away_team] || ''} {saved.away_team}
+                    {saved.winner && <> · Avanza: <strong>{FLAGS[saved.winner] || ''} {saved.winner}</strong></>}
+                    {(saved.home_goals !== null && saved.home_goals !== undefined) && <> · {saved.home_goals}-{saved.away_goals}{saved.penalties ? ' (pen.)' : ''}</>}
                   </div>
                 )}
               </div>

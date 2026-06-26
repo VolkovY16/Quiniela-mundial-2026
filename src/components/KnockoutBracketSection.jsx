@@ -1,143 +1,128 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, FLAGS, formatDate } from '../lib/worldcupData.js';
 import { saveKoDetailPick } from '../lib/supabase.js';
 
 const PHASES = [
-  { id: 'r32', label: 'R32', fullLabel: 'Dieciseisavos', matches: R32_BRACKET },
-  { id: 'r16', label: 'R16', fullLabel: 'Octavos', matches: R16_BRACKET },
-  { id: 'qf',  label: 'QF',  fullLabel: 'Cuartos', matches: QF_BRACKET },
-  { id: 'sf',  label: 'SF',  fullLabel: 'Semis', matches: SF_BRACKET },
-  { id: 'final', label: 'Final', fullLabel: 'Final', matches: [FINAL, THIRD_PLACE] },
+  { id: 'r32',   label: 'R32', fullLabel: 'Dieciseisavos', matches: R32_BRACKET },
+  { id: 'r16',   label: 'R16', fullLabel: 'Octavos',       matches: R16_BRACKET },
+  { id: 'qf',    label: 'QF',  fullLabel: 'Cuartos',       matches: QF_BRACKET },
+  { id: 'sf',    label: 'SF',  fullLabel: 'Semis',         matches: SF_BRACKET },
+  { id: 'final', label: 'Final', fullLabel: 'Final',       matches: [FINAL, THIRD_PLACE] },
 ];
 
-function ScoreBox({ value, onChange, disabled }) {
-  return (
-    <input
-      type="number" min="0" max="20"
-      value={value === null || value === undefined ? '' : value}
-      onChange={e => onChange(e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0))}
-      disabled={disabled}
-      className="ko-score-input"
-      placeholder="-"
-    />
-  );
-}
-
-function MatchCard({ match, result, pick, onSave, frozen }) {
-  const picksRef = useRef(pick || {});
-  const [localPick, setLocalPick] = useState(pick || {});
+function MatchCard({ match, result, pick, userId, frozen }) {
+  const localRef = useRef({ ...pick });
+  const [local, setLocal] = useState({ ...pick });
   const [saveState, setSaveState] = useState('');
-  const saveTimer = useRef(null);
+  const timer = useRef(null);
 
   useEffect(() => {
-    picksRef.current = pick || {};
-    setLocalPick(pick || {});
+    localRef.current = { ...pick };
+    setLocal({ ...pick });
   }, [pick]);
 
   const homeTeam = result?.home_team || null;
   const awayTeam = result?.away_team || null;
   const hasTeams = homeTeam && awayTeam;
-  const isDisabled = frozen || !hasTeams;
-
   const realWinner = result?.winner || null;
   const realScore = result?.home_goals !== null && result?.home_goals !== undefined;
+  const isDisabled = frozen || !hasTeams;
 
-  function getWinnerClass(team) {
-    if (!localPick.winner || !team) return '';
-    if (localPick.winner === team) {
-      if (realWinner) return realWinner === team ? 'ko-winner-correct' : 'ko-winner-wrong';
-      return 'ko-winner-selected';
-    }
-    return '';
-  }
-
-  function getScoreClass() {
-    if (!realScore || localPick.home_goals === null || localPick.home_goals === undefined) return '';
-    if (localPick.home_goals === result.home_goals && localPick.away_goals === result.away_goals && localPick.penalties === result.penalties) return 'score-exact';
-    return '';
-  }
-
-  async function handleChange(field, value) {
-    if (isDisabled) return;
-    const updated = { ...picksRef.current, [field]: value };
-    picksRef.current = updated;
-    setLocalPick({ ...updated });
-
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+  async function persist(updated) {
+    if (timer.current) clearTimeout(timer.current);
     setSaveState('saving');
-    saveTimer.current = setTimeout(async () => {
+    timer.current = setTimeout(async () => {
       try {
-        await onSave(match.id, updated.home_goals, updated.away_goals, updated.penalties, updated.winner);
+        await saveKoDetailPick(userId, match.id, updated.home_goals, updated.away_goals, updated.penalties, updated.winner);
         setSaveState('saved');
-      } catch (e) {
+      } catch {
         setSaveState('error');
       }
-    }, 400);
+    }, 350);
   }
 
-  // Points preview
-  let ptsPreview = null;
-  if (realWinner && localPick.winner) {
-    if (localPick.winner === realWinner) {
-      const exactScore = localPick.home_goals === result.home_goals &&
-                         localPick.away_goals === result.away_goals &&
-                         localPick.penalties === result.penalties;
-      ptsPreview = exactScore ? '+3 pts ⭐' : '+1 pt ✓';
+  function update(field, value) {
+    if (isDisabled) return;
+    const updated = { ...localRef.current, [field]: value };
+    localRef.current = updated;
+    setLocal({ ...updated });
+    persist(updated);
+  }
+
+  // Score color
+  function scoreClass() {
+    if (!realScore || local.home_goals === null || local.home_goals === undefined) return '';
+    if (local.home_goals === result.home_goals && local.away_goals === result.away_goals && !!local.penalties === !!result.penalties) return 'score-exact';
+    return '';
+  }
+
+  // Team button color
+  function teamClass(team) {
+    if (!local.winner || local.winner !== team) return '';
+    if (!realWinner) return 'ko-winner-selected';
+    return realWinner === team ? 'ko-winner-correct' : 'ko-winner-wrong';
+  }
+
+  // Points
+  let ptsLabel = null;
+  if (realWinner && local.winner) {
+    if (local.winner === realWinner) {
+      const exact = realScore &&
+        local.home_goals === result.home_goals &&
+        local.away_goals === result.away_goals &&
+        !!local.penalties === !!result.penalties;
+      ptsLabel = exact ? { text: '+3 pts ⭐', cls: 'exact' } : { text: '+1 pt ✓', cls: 'correct' };
     } else {
-      ptsPreview = '0 pts ✗';
+      ptsLabel = { text: '0 pts ✗', cls: 'wrong' };
     }
   }
 
   return (
     <div className={`ko-bracket-card ${frozen ? 'ko-frozen' : ''} ${!hasTeams ? 'ko-pending' : ''}`}>
+      {/* Header */}
       <div className="ko-card-header">
         <span className="ko-match-num">M{match.matchNum}</span>
         <span className="ko-match-date">{formatDate(match.date)}</span>
         {frozen && <span className="ko-frozen-badge">🔒</span>}
-        {saveState === 'saving' && <span className="ko-save-state saving">...</span>}
-        {saveState === 'saved' && <span className="ko-save-state saved">✓</span>}
-        {saveState === 'error' && <span className="ko-save-state error">⚠</span>}
+        <span className={`ko-save-state ${saveState}`}>
+          {saveState === 'saving' ? '···' : saveState === 'saved' ? '✓' : saveState === 'error' ? '⚠' : ''}
+        </span>
       </div>
 
       {!hasTeams ? (
-        <div className="ko-pending-teams">Por definir</div>
+        <div className="ko-pending-teams">El admin aún no ha definido los equipos</div>
       ) : (
         <>
-          {/* HOME TEAM */}
-          <button
-            className={`ko-team-btn ${getWinnerClass(homeTeam)}`}
-            onClick={() => handleChange('winner', localPick.winner === homeTeam ? null : homeTeam)}
-            disabled={isDisabled}
-          >
+          {/* HOME TEAM BUTTON */}
+          <button className={`ko-team-btn ${teamClass(homeTeam)}`} onClick={() => update('winner', local.winner === homeTeam ? null : homeTeam)} disabled={isDisabled}>
             <span className="ko-flag">{FLAGS[homeTeam] || '🏳️'}</span>
             <span className="ko-team-name">{homeTeam}</span>
           </button>
 
-          {/* SCORE ROW */}
-          <div className={`ko-score-row ${getScoreClass()}`}>
-            <ScoreBox value={localPick.home_goals} onChange={v => handleChange('home_goals', v)} disabled={isDisabled} />
+          {/* SCORE */}
+          <div className={`ko-score-row ${scoreClass()}`}>
+            <input type="number" min="0" max="20" className="ko-score-input"
+              value={local.home_goals ?? ''} placeholder="-" disabled={isDisabled}
+              onChange={e => update('home_goals', e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0))}
+            />
             <span className="ko-score-sep">-</span>
-            <ScoreBox value={localPick.away_goals} onChange={v => handleChange('away_goals', v)} disabled={isDisabled} />
+            <input type="number" min="0" max="20" className="ko-score-input"
+              value={local.away_goals ?? ''} placeholder="-" disabled={isDisabled}
+              onChange={e => update('away_goals', e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0))}
+            />
           </div>
 
           {/* PENALTIES */}
           <label className={`ko-penalties-label ${isDisabled ? 'disabled' : ''}`}>
-            <input
-              type="checkbox"
-              checked={!!localPick.penalties}
-              onChange={e => handleChange('penalties', e.target.checked)}
-              disabled={isDisabled}
+            <input type="checkbox" checked={!!local.penalties}
+              onChange={e => update('penalties', e.target.checked)} disabled={isDisabled}
             />
             <span>Penales</span>
             {result?.penalties && <span className="ko-penalties-real">✓ Sí fueron</span>}
           </label>
 
-          {/* AWAY TEAM */}
-          <button
-            className={`ko-team-btn ${getWinnerClass(awayTeam)}`}
-            onClick={() => handleChange('winner', localPick.winner === awayTeam ? null : awayTeam)}
-            disabled={isDisabled}
-          >
+          {/* AWAY TEAM BUTTON */}
+          <button className={`ko-team-btn ${teamClass(awayTeam)}`} onClick={() => update('winner', local.winner === awayTeam ? null : awayTeam)} disabled={isDisabled}>
             <span className="ko-flag">{FLAGS[awayTeam] || '🏳️'}</span>
             <span className="ko-team-name">{awayTeam}</span>
           </button>
@@ -145,16 +130,14 @@ function MatchCard({ match, result, pick, onSave, frozen }) {
           {/* REAL RESULT */}
           {realWinner && (
             <div className="ko-real-result">
-              Avanza: <strong>{FLAGS[realWinner]} {realWinner}</strong>
+              Avanza: <strong>{FLAGS[realWinner] || ''} {realWinner}</strong>
               {realScore && <span> ({result.home_goals}-{result.away_goals}{result.penalties ? ' pen.' : ''})</span>}
             </div>
           )}
 
-          {/* POINTS PREVIEW */}
-          {ptsPreview && (
-            <div className={`ko-pts-preview ${ptsPreview.startsWith('+3') ? 'exact' : ptsPreview.startsWith('+1') ? 'correct' : 'wrong'}`}>
-              {ptsPreview}
-            </div>
+          {/* POINTS */}
+          {ptsLabel && (
+            <div className={`ko-pts-preview ${ptsLabel.cls}`}>{ptsLabel.text}</div>
           )}
         </>
       )}
@@ -162,38 +145,35 @@ function MatchCard({ match, result, pick, onSave, frozen }) {
   );
 }
 
-export default function KnockoutBracketSection({ session, picks, results, onPickSaved }) {
+export default function KnockoutBracketSection({ session, picks, results }) {
   const [activePhase, setActivePhase] = useState('r32');
-
-  async function handleSave(matchId, homeGoals, awayGoals, penalties, winner) {
-    await saveKoDetailPick(session.user.id, matchId, homeGoals, awayGoals, penalties, winner);
-    onPickSaved?.();
-  }
-
   const phaseData = PHASES.find(p => p.id === activePhase);
+
+  const filledInPhase = phaseData.matches.filter(m => results[m.id]?.home_team).length;
 
   return (
     <div className="ko-bracket-section">
       <div className="ko-bracket-info">
-        ⭐ Marcador exacto o penales acertados = <strong>3 pts</strong> · ✓ Ganador correcto = <strong>1 pt</strong>
-        <br/>Selecciona al ganador tocando el equipo. Los equipos los define el admin conforme avanza el torneo.
+        ⭐ Marcador exacto o penales acertados = <strong>3 pts</strong> &nbsp;·&nbsp; ✓ Ganador correcto = <strong>1 pt</strong><br/>
+        Toca un equipo para marcarlo como tu ganador. Llena el marcador que predices y si crees que irán a penales.
+        Los equipos aparecen cuando el admin los confirma.
       </div>
 
-      {/* Phase tabs */}
       <div className="ko-phase-tabs">
         {PHASES.map(p => (
-          <button
-            key={p.id}
-            className={`ko-phase-tab ${activePhase === p.id ? 'active' : ''}`}
-            onClick={() => setActivePhase(p.id)}
-          >
+          <button key={p.id} className={`ko-phase-tab ${activePhase === p.id ? 'active' : ''}`} onClick={() => setActivePhase(p.id)}>
             <span className="phase-short">{p.label}</span>
             <span className="phase-full">{p.fullLabel}</span>
           </button>
         ))}
       </div>
 
-      {/* Bracket scroll */}
+      {filledInPhase === 0 && (
+        <div className="ko-no-teams-notice">
+          ⏳ El admin aún no ha confirmado los equipos para esta ronda.
+        </div>
+      )}
+
       <div className="ko-bracket-scroll">
         <div className="ko-bracket-cards">
           {phaseData.matches.map(match => (
@@ -202,7 +182,7 @@ export default function KnockoutBracketSection({ session, picks, results, onPick
               match={match}
               result={results[match.id] || null}
               pick={picks[match.id] || {}}
-              onSave={handleSave}
+              userId={session.user.id}
               frozen={results[match.id]?.frozen || false}
             />
           ))}
