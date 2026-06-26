@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { GROUPS, getAllGroupMatches } from '../lib/worldcupData.js';
-import { savePick, saveKnockoutPick, getUserPicks, getUserBonusPicks, saveBonusPick, confirmQuiniela, getUserMeta, getBonusChallenges, getAllResults, getGroupStandings } from '../lib/supabase.js';
+import { savePick, saveKnockoutPick, getUserPicks, getUserBonusPicks, saveBonusPick, confirmQuiniela, getUserMeta, getBonusChallenges, getAllResults, getGroupStandings, getUserKoDetailPicks, getKoDetailResults } from '../lib/supabase.js';
 import GroupStageSection from '../components/GroupStageSection.jsx';
 import GroupTablesSection from '../components/GroupTablesSection.jsx';
+import KnockoutBracketSection from '../components/KnockoutBracketSection.jsx';
 import KnockoutSection from '../components/KnockoutSection.jsx';
 import BonusSection from '../components/BonusSection.jsx';
 
@@ -16,6 +17,8 @@ export default function QuinielasPage({ session, userMeta }) {
   const [activeGroup, setActiveGroup] = useState('A');
   const [saveStatus, setSaveStatus] = useState({}); // matchId -> 'saving' | 'saved' | 'error'
   const [groupStandings, setGroupStandings] = useState([]);
+  const [koBracketPicks, setKoBracketPicks] = useState({});
+  const [koBracketResults, setKoBracketResults] = useState({});
   const [tab, setTab] = useState('group');
   const allMatches = getAllGroupMatches();
 
@@ -29,14 +32,24 @@ export default function QuinielasPage({ session, userMeta }) {
   }, [session?.user?.id]);
 
   async function loadData() {
-    const [userPicksData, userBonusData, challenges, realResults, standings] = await Promise.all([
+    const [userPicksData, userBonusData, challenges, realResults, standings, koDetailPicksData, koDetailResultsData] = await Promise.all([
       getUserPicks(session.user.id),
       getUserBonusPicks(session.user.id),
       getBonusChallenges(),
       getAllResults(),
       getGroupStandings(),
+      getUserKoDetailPicks(session.user.id),
+      getKoDetailResults(),
     ]);
     setGroupStandings(standings);
+
+    const koBracketPicksMap = {};
+    for (const p of koDetailPicksData) koBracketPicksMap[p.match_id] = p;
+    setKoBracketPicks(koBracketPicksMap);
+
+    const koBracketResultsMap = {};
+    for (const r of koDetailResultsData) koBracketResultsMap[r.match_id] = r;
+    setKoBracketResults(koBracketResultsMap);
     const meta = await getUserMeta(session.user.id);
     setConfirmed(meta?.confirmed || false);
 
@@ -169,6 +182,9 @@ export default function QuinielasPage({ session, userMeta }) {
         <button className={tab === 'tables' ? 'phase-tab active' : 'phase-tab'} onClick={() => setTab('tables')}>
           Tablas
         </button>
+        <button className={tab === 'bracket' ? 'phase-tab active' : 'phase-tab'} onClick={() => setTab('bracket')}>
+          🏆 Bracket
+        </button>
       </div>
 
       {tab === 'group' && (
@@ -191,6 +207,15 @@ export default function QuinielasPage({ session, userMeta }) {
           picks={picks}
           confirmed={confirmed}
           onKoPick={handleKoPick}
+        />
+      )}
+
+      {tab === 'bracket' && (
+        <KnockoutBracketSection
+          session={session}
+          picks={koBracketPicks}
+          results={koBracketResults}
+          onPickSaved={() => {}}
         />
       )}
 

@@ -368,3 +368,88 @@ input { font-family: inherit; }
 .standings-actions { margin-bottom: 0.6rem; }
 .standings-confirmed-msg { color: var(--green); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; }
 .standings-auto-hint { margin-top: 0.5rem; }
+
+/* ─── KNOCKOUT BRACKET (user view) ──────────────────────────────────────────── */
+.ko-bracket-section { display: flex; flex-direction: column; gap: 0.8rem; }
+.ko-bracket-info { background: #eef6ff; border: 1px solid #b8d8ff; color: #234; padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.82rem; line-height: 1.5; }
+.ko-phase-tabs { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.ko-phase-tab { background: white; border: 1px solid var(--border); padding: 0.45rem 0.7rem; border-radius: 8px; font-weight: 700; font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.1rem; }
+.ko-phase-tab .phase-short { font-size: 0.85rem; }
+.ko-phase-tab .phase-full { font-size: 0.65rem; color: var(--text-muted); font-weight: 400; }
+.ko-phase-tab.active { background: var(--green); color: white; border-color: var(--green); }
+.ko-phase-tab.active .phase-full { color: rgba(255,255,255,0.75); }
+
+.ko-bracket-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
+.ko-bracket-cards { display: flex; gap: 0.7rem; padding: 0.2rem; min-width: max-content; flex-wrap: wrap; }
+
+.ko-bracket-card {
+  background: white; border: 1px solid var(--border); border-radius: 12px; padding: 0.7rem;
+  width: 175px; display: flex; flex-direction: column; gap: 0.4rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.ko-bracket-card.ko-frozen { background: #f8f8f8; border-color: #ccc; opacity: 0.85; }
+.ko-bracket-card.ko-pending { border-style: dashed; background: #fafafa; }
+
+.ko-card-header { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.ko-match-num { font-weight: 800; font-size: 0.72rem; color: var(--green); }
+.ko-match-date { font-size: 0.68rem; color: var(--text-muted); flex: 1; }
+.ko-frozen-badge { font-size: 0.75rem; }
+.ko-save-state { font-size: 0.7rem; font-weight: 700; }
+.ko-save-state.saving { color: #8a6d00; }
+.ko-save-state.saved { color: var(--green); }
+.ko-save-state.error { color: var(--red); }
+
+.ko-pending-teams { color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 0.5rem; font-style: italic; }
+
+.ko-team-btn {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: #f5f6f0; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 0.45rem 0.6rem; text-align: left; font-weight: 600; font-size: 0.78rem;
+  width: 100%; cursor: pointer; transition: all 0.15s;
+}
+.ko-team-btn:disabled { opacity: 0.6; cursor: default; }
+.ko-team-btn.ko-winner-selected { background: #e8f5ed; border-color: var(--green); color: var(--green); }
+.ko-team-btn.ko-winner-correct { background: var(--green); border-color: var(--green); color: white; }
+.ko-team-btn.ko-winner-wrong { background: #fdecea; border-color: var(--red); color: var(--red); }
+.ko-flag { font-size: 1.1rem; flex-shrink: 0; }
+.ko-team-name { font-size: 0.75rem; line-height: 1.2; }
+
+.ko-score-row { display: flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.2rem 0; }
+.ko-score-row.score-exact { background: var(--green-light); border-radius: 6px; }
+.ko-score-input { width: 38px; text-align: center; padding: 0.3rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; font-weight: 700; }
+.ko-score-input:disabled { background: #f0f0ec; }
+.ko-score-sep { font-weight: 800; color: var(--text-muted); font-size: 0.9rem; }
+
+.ko-penalties-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; padding: 0.1rem 0; }
+.ko-penalties-label.disabled { cursor: default; opacity: 0.6; }
+.ko-penalties-real { color: var(--green); font-weight: 700; margin-left: 0.3rem; }
+
+.ko-real-result { font-size: 0.72rem; color: var(--text-muted); text-align: center; border-top: 1px solid var(--border); padding-top: 0.3rem; margin-top: 0.1rem; }
+.ko-pts-preview { text-align: center; font-size: 0.75rem; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 8px; }
+.ko-pts-preview.exact { background: var(--green-light); color: var(--green); }
+.ko-pts-preview.correct { background: #fffbe8; color: #8a6d00; }
+.ko-pts-preview.wrong { background: #fdecea; color: var(--red); }
+
+/* ─── ADMIN KNOCKOUT DETAIL ──────────────────────────────────────────────────── */
+.admin-ko-detail-header { margin-bottom: 1rem; }
+.admin-ko-matches { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.8rem; margin-top: 0.8rem; }
+.admin-ko-detail-card { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem; }
+.admin-ko-detail-card.ko-frozen { background: #f8f8f8; border-color: #999; }
+.admin-ko-detail-header-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.admin-ko-detail-body { display: flex; flex-direction: column; gap: 0.4rem; }
+.admin-ko-team-row { display: flex; align-items: center; gap: 0.5rem; }
+.admin-ko-flag { font-size: 1.2rem; }
+.admin-ko-team-name { flex: 1; font-weight: 600; font-size: 0.85rem; }
+.admin-ko-middle { display: flex; justify-content: center; }
+.admin-ko-penalties { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; cursor: pointer; }
+.admin-ko-winner-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; padding-top: 0.3rem; border-top: 1px solid var(--border); margin-top: 0.2rem; }
+.admin-ko-winner-btn { background: #f5f6f0; border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+.admin-ko-winner-btn.selected { background: var(--green); color: white; border-color: var(--green); }
+.btn-freeze { background: #f0f0ea; border: 1px solid var(--border); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 700; cursor: pointer; margin-left: auto; }
+.btn-freeze.frozen { background: #333; color: white; border-color: #333; }
+
+@media (max-width: 640px) {
+  .ko-bracket-cards { flex-wrap: nowrap; }
+  .ko-bracket-card { width: 160px; }
+  .ko-team-name { font-size: 0.7rem; }
+}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getAllGroupMatches, GROUPS, FLAGS, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, FINAL, THIRD_PLACE, formatDate, computeThirdPlaces, assignThirdsToSlots } from '../lib/worldcupData.js';
+import AdminKnockoutDetail from '../components/AdminKnockoutDetail.jsx';
 import { computeGroupTable } from '../lib/scoring.js';
-import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, savePick, confirmQuiniela, unconfirmQuiniela, getGroupStandings, saveGroupStanding, supabase } from '../lib/supabase.js';
+import { saveResult, saveKnockoutResult, getAllResults, toggleDoubleMatch, getDoubleMatches, getBonusChallenges, saveBonusChallenge, saveBonusResult, getAllUsers, savePick, confirmQuiniela, unconfirmQuiniela, getGroupStandings, saveGroupStanding, getKoDetailResults, supabase } from '../lib/supabase.js';
 
 // ─── ADMIN KNOCKOUT BRACKET (connected to real group results) ──────────────
 function AdminKnockoutBracket({ koResults, setKoResults, doubleMatches, handleToggleDouble, realResults }) {
@@ -115,6 +116,7 @@ function AdminUserEditor({ users, allMatches, onUserUpdated }) {
   const [userPicks, setUserPicks] = useState({});
   const [saving, setSaving] = useState('');
   const [groupStandings, setGroupStandings] = useState({});
+  const [koDetailResults, setKoDetailResults] = useState({});
   const [activeGroup, setActiveGroup] = useState('A');
 
   async function loadUserPicks(user) {
@@ -348,22 +350,27 @@ export default function AdminPage() {
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState('');
   const [groupStandings, setGroupStandings] = useState({});
+  const [koDetailResults, setKoDetailResults] = useState({});
   const [activeGroup, setActiveGroup] = useState('A');
   const allMatches = getAllGroupMatches();
 
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
-    const [res, doubles, challenges, usersData, standings] = await Promise.all([
+    const [res, doubles, challenges, usersData, standings, koDetail] = await Promise.all([
       getAllResults(),
       getDoubleMatches(),
       getBonusChallenges(),
       getAllUsers(),
       getGroupStandings(),
+      getKoDetailResults(),
     ]);
     const standingsMap = {};
     for (const s of standings) standingsMap[s.group_id] = s;
     setGroupStandings(standingsMap);
+    const koDetailMap = {};
+    for (const r of koDetail) koDetailMap[r.match_id] = r;
+    setKoDetailResults(koDetailMap);
     const resMap = {}; for (const r of res.results) resMap[r.match_id] = r;
     setResults(resMap);
     const koMap = {}; for (const r of res.koResults) koMap[r.match_id] = r;
@@ -417,6 +424,7 @@ export default function AdminPage() {
         {[
           { id: 'results',    label: '📊 Resultados Grupos' },
           { id: 'knockout',   label: '🏆 Bracket Eliminatorias' },
+          { id: 'ko_detail',  label: '⚙ Bracket Detallado' },
           { id: 'double',     label: '×2 Partidos Dobles' },
           { id: 'bonus',      label: '🎯 Bonus' },
           { id: 'users',      label: '👥 Editar Quinielas' },
@@ -511,6 +519,15 @@ export default function AdminPage() {
       )}
 
       {tab === 'users' && <AdminUserEditor users={users} allMatches={allMatches} onUserUpdated={loadData} />}
+
+      {tab === 'ko_detail' && (
+        <AdminKnockoutDetail
+          koResults={koDetailResults}
+          setKoResults={setKoDetailResults}
+          groupResults={results}
+          allMatches={allMatches}
+        />
+      )}
 
       {tab === 'standings' && (
         <AdminGroupStandings

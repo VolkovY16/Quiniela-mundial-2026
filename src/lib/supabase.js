@@ -235,3 +235,67 @@ export async function getGroupStandings() {
   const { data } = await supabase.from('group_standings').select('*');
   return data || [];
 }
+
+// ─── KNOCKOUT DETAIL PICKS ───────────────────────────────────────────────────
+
+export async function saveKoDetailPick(userId, matchId, homeGoals, awayGoals, penalties, winner) {
+  const { error } = await supabase.from('knockout_picks_detail').upsert({
+    user_id: userId,
+    match_id: matchId,
+    home_goals: homeGoals,
+    away_goals: awayGoals,
+    penalties: penalties || false,
+    winner: winner || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,match_id' });
+  if (error) throw error;
+}
+
+export async function getUserKoDetailPicks(userId) {
+  const { data } = await supabase.from('knockout_picks_detail').select('*').eq('user_id', userId);
+  return data || [];
+}
+
+export async function getAllKoDetailPicks() {
+  const allRows = [];
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase.from('knockout_picks_detail').select('*').range(from, from + pageSize - 1);
+    if (error || !data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return allRows;
+}
+
+// ─── KNOCKOUT DETAIL RESULTS (admin) ─────────────────────────────────────────
+
+export async function saveKoDetailResult(matchId, homeTeam, awayTeam, homeGoals, awayGoals, penalties, winner) {
+  const { error } = await supabase.from('knockout_results_detail').upsert({
+    match_id: matchId,
+    home_team: homeTeam,
+    away_team: awayTeam,
+    home_goals: homeGoals,
+    away_goals: awayGoals,
+    penalties: penalties || false,
+    winner: winner || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'match_id' });
+  if (error) throw error;
+}
+
+export async function getKoDetailResults() {
+  const { data } = await supabase.from('knockout_results_detail').select('*');
+  return data || [];
+}
+
+export async function toggleKoFreeze(matchId, frozen) {
+  const { error } = await supabase.from('knockout_results_detail').upsert({
+    match_id: matchId,
+    frozen,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'match_id' });
+  if (error) throw error;
+}
