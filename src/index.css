@@ -453,3 +453,19 @@ input { font-family: inherit; }
   .ko-bracket-card { width: 160px; }
   .ko-team-name { font-size: 0.7rem; }
 }
+
+/* Team autocomplete */
+.team-autocomplete { position: relative; }
+.team-input-row { display: flex; align-items: center; gap: 0.4rem; }
+.team-text-input { flex: 1; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+.team-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; }
+.team-dropdown-item { display: block; width: 100%; text-align: left; padding: 0.4rem 0.7rem; background: none; border: none; font-size: 0.82rem; cursor: pointer; }
+.team-dropdown-item:hover { background: var(--green-light); }
+.admin-ko-team-section { display: flex; flex-direction: column; gap: 0.2rem; }
+.admin-ko-field-label { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
+.auto-suggest { color: var(--green); cursor: pointer; font-weight: 700; margin-left: 0.3rem; }
+.auto-suggest:hover { text-decoration: underline; }
+.admin-ko-vs-row { display: flex; align-items: center; justify-content: space-between; padding: 0.2rem 0; }
+.btn-save-ko { background: var(--green); color: white; border: none; border-radius: 8px; padding: 0.5rem; font-weight: 700; font-size: 0.85rem; cursor: pointer; margin-top: 0.3rem; }
+.btn-save-ko:disabled { opacity: 0.6; }
+.admin-ko-saved-status { font-size: 0.72rem; color: var(--green); background: var(--green-light); padding: 0.3rem 0.5rem; border-radius: 6px; }
