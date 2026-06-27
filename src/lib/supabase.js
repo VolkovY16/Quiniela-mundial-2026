@@ -299,3 +299,17 @@ export async function toggleKoFreeze(matchId, frozen) {
   }, { onConflict: 'match_id' });
   if (error) throw error;
 }
+
+// ─── APP SETTINGS (shared across all users) ──────────────────────────────────
+
+export async function getAppSetting(key) {
+  const { data } = await supabase.from('app_settings').select('value').eq('key', key).single();
+  return data?.value ?? null;
+}
+
+export async function setAppSetting(key, value) {
+  const { error } = await supabase.from('app_settings').upsert({
+    key, value, updated_at: new Date().toISOString()
+  }, { onConflict: 'key' });
+  if (error) throw error;
+}

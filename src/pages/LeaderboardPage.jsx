@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDoubleMatches, getGroupStandings, supabase } from '../lib/supabase.js';
+import { getAllUserPicks, getAllResults, getAllUsers, getBonusChallenges, getDoubleMatches, getGroupStandings, getAppSetting, setAppSetting, supabase } from '../lib/supabase.js';
 import { getAllGroupMatches, GROUPS } from '../lib/worldcupData.js';
 import { computeLeaderboard } from '../lib/scoring.js';
 
@@ -7,13 +7,17 @@ export default function LeaderboardPage({ session, userMeta }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [hiddenUsers, setHiddenUsers] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hiddenUsers') || '[]'); } catch { return []; }
-  });
+  const [hiddenUsers, setHiddenUsers] = useState([]);
   const isAdmin = userMeta?.is_admin === true;
 
   useEffect(() => {
     loadLeaderboard();
+    loadHidden();
+
+  async function loadHidden() {
+    const val = await getAppSetting('hidden_users');
+    if (Array.isArray(val)) setHiddenUsers(val);
+  }
 
     const channel = supabase
       .channel('leaderboard_updates')
@@ -68,12 +72,12 @@ export default function LeaderboardPage({ session, userMeta }) {
   const medals = ['🥇', '🥈', '🥉'];
   const hasResults = visibleLeaderboard.some(e => e.totalPts > 0);
 
-  function toggleHide(userId) {
-    setHiddenUsers(prev => {
-      const next = prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId];
-      localStorage.setItem('hiddenUsers', JSON.stringify(next));
-      return next;
-    });
+  async function toggleHide(userId) {
+    const next = hiddenUsers.includes(userId)
+      ? hiddenUsers.filter(id => id !== userId)
+      : [...hiddenUsers, userId];
+    setHiddenUsers(next);
+    await setAppSetting('hidden_users', next);
   }
 
   return (

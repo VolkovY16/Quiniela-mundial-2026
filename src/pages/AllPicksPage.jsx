@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAllUsers, getAllUserPicks, getAllResults, getKoDetailResults, getAllKoDetailPicks } from '../lib/supabase.js';
+import { getAllUsers, getAllUserPicks, getAllResults, getKoDetailResults, getAllKoDetailPicks, getAppSetting, setAppSetting } from '../lib/supabase.js';
 import { getAllGroupMatches, FLAGS, formatDate, FINAL, R32_BRACKET, R16_BRACKET, QF_BRACKET, SF_BRACKET, THIRD_PLACE } from '../lib/worldcupData.js';
 import { scoreGroupMatch } from '../lib/scoring.js';
 
@@ -15,9 +15,7 @@ export default function AllPicksPage({ session, userMeta }) {
   const [tab, setTab] = useState('groups');
   const [koPhase, setKoPhase] = useState('r32');
   const [users, setUsers] = useState([]);
-  const [hiddenUsers, setHiddenUsers] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hiddenUsers') || '[]'); } catch { return []; }
-  });
+  const [hiddenUsers, setHiddenUsers] = useState([]);
   const [picksByUser, setPicksByUser] = useState({});
   const [koPicksByUser, setKoPicksByUser] = useState({});
   const [results, setResults] = useState({});
@@ -25,7 +23,12 @@ export default function AllPicksPage({ session, userMeta }) {
   const [loading, setLoading] = useState(true);
   const isAdmin = userMeta?.is_admin === true;
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadHidden(); }, []);
+
+  async function loadHidden() {
+    const val = await getAppSetting('hidden_users');
+    if (Array.isArray(val)) setHiddenUsers(val);
+  }
 
   async function load() {
     setLoading(true);
@@ -69,12 +72,12 @@ export default function AllPicksPage({ session, userMeta }) {
     }
   }
 
-  function toggleHide(userId) {
-    setHiddenUsers(prev => {
-      const next = prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId];
-      localStorage.setItem('hiddenUsers', JSON.stringify(next));
-      return next;
-    });
+  async function toggleHide(userId) {
+    const next = hiddenUsers.includes(userId)
+      ? hiddenUsers.filter(id => id !== userId)
+      : [...hiddenUsers, userId];
+    setHiddenUsers(next);
+    await setAppSetting('hidden_users', next);
   }
 
   const visibleUsers = users.filter(u => !hiddenUsers.includes(u.user_id));
