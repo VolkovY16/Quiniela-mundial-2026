@@ -11,13 +11,24 @@ const PHASES = [
   { id: 'final', label: 'Final', fullLabel: 'Final',       matches: [FINAL, THIRD_PLACE] },
 ];
 
-// Resolve teams for a match based on user's previous picks (for R16 onwards)
-// For R32, teams come from real results (admin-defined)
 function resolveTeams(match, userPicks, realResults) {
   // R32: teams from admin real results
   if (R32_BRACKET.find(m => m.id === match.id)) {
     const real = realResults[match.id] || {};
     return { home: real.home_team || null, away: real.away_team || null };
+  }
+  // Third place: losers of SF
+  if (match.id === THIRD_PLACE.id) {
+    const sf1pick = userPicks['sf_101'] || {};
+    const sf2pick = userPicks['sf_102'] || {};
+    // Need to resolve SF teams too
+    const sf1home = userPicks[SF_BRACKET[0].homeSource]?.winner || null;
+    const sf1away = userPicks[SF_BRACKET[0].awaySource]?.winner || null;
+    const sf2home = userPicks[SF_BRACKET[1].homeSource]?.winner || null;
+    const sf2away = userPicks[SF_BRACKET[1].awaySource]?.winner || null;
+    const sf1loser = sf1pick.winner ? (sf1pick.winner === sf1home ? sf1away : sf1home) : null;
+    const sf2loser = sf2pick.winner ? (sf2pick.winner === sf2home ? sf2away : sf2home) : null;
+    return { home: sf1loser, away: sf2loser };
   }
   // Later rounds: teams from user's previous picks
   const home = match.homeSource ? (userPicks[match.homeSource]?.winner || null) : null;
@@ -33,14 +44,12 @@ function MatchCard({ match, userPicks, realResults, onSave, phaseId }) {
   const hasTeams = home && away;
   const isDisabled = frozen || !hasTeams;
 
-  // Local state for immediate UI feedback
   const [localPick, setLocalPick] = useState({ ...pick });
   const localRef = useRef({ ...pick });
   const [saveState, setSaveState] = useState('');
   const saveTimer = useRef(null);
-  const retryCount = useRef(0);
+  const retries = useRef(0);
 
-  // Sync when pick changes from parent (e.g. on load)
   useEffect(() => {
     localRef.current = { ...pick };
     setLocalPick({ ...pick });
@@ -54,14 +63,14 @@ function MatchCard({ match, userPicks, realResults, onSave, phaseId }) {
         try {
           await onSave(match.id, updated.home_goals, updated.away_goals, updated.penalties, updated.winner);
           setSaveState('saved');
-          retryCount.current = 0;
+          retries.current = 0;
         } catch (e) {
-          if (retryCount.current < 3) {
-            retryCount.current++;
-            setTimeout(attempt, 1000 * retryCount.current);
+          if (retries.current < 3) {
+            retries.current++;
+            setTimeout(attempt, 800 * retries.current);
           } else {
             setSaveState('error');
-            retryCount.current = 0;
+            retries.current = 0;
           }
         }
       };
@@ -77,34 +86,28 @@ function MatchCard({ match, userPicks, realResults, onSave, phaseId }) {
     persist(updated);
   }
 
-  // Scoring
   const { pts, status } = scoreKoPick(localPick, real.winner ? real : null);
 
-  // Card border color based on status
-  const cardClass = [
-    'ko-bracket-card',
-    frozen ? 'ko-frozen' : '',
-    !hasTeams ? 'ko-pending' : '',
-    status === 'exact' ? 'ko-card-exact' : '',
-    status === 'correct' ? 'ko-card-correct' : '',
-    status === 'wrong' ? 'ko-card-wrong' : '',
-  ].filter(Boolean).join(' ');
+  const cardBorder = status === 'exact' ? '2px solid #0d6e3f' :
+                     status === 'correct' ? '2px solid #f5c842' :
+                     status === 'wrong' ? '2px solid #c0392b' :
+                     '1px solid var(--border)';
 
-  // Team button class
   function teamClass(team) {
-    if (!localPick.winner || localPick.winner !== team) return 'ko-team-btn';
-    if (!real.winner) return 'ko-team-btn ko-winner-selected';
-    if (real.winner === team) return 'ko-team-btn ko-winner-correct';
-    return 'ko-team-btn ko-winner-wrong';
+    if (!localPick.winner || localPick.winner !== team) return '';
+    if (!real.winner) return 'ko-winner-selected';
+    if (real.winner === team) return 'ko-winner-correct';
+    return 'ko-winner-wrong';
   }
 
-  const scoreClass = status === 'exact' ? 'ko-score-row score-exact' : 'ko-score-row';
+  const isThird = match.id === THIRD_PLACE.id;
 
   return (
-    <div className={cardClass}>
+    <div className="ko-bracket-card" style={{border: cardBorder}}>
       <div className="ko-card-header">
         <span className="ko-match-num">M{match.matchNum}</span>
         <span className="ko-match-date">{formatDate(match.date)}</span>
+        {isThird && <span style={{fontSize:'0.7rem',color:'var(--text-muted)',fontWeight:'700'}}>3° Lugar</span>}
         {frozen && <span className="ko-frozen-badge">🔒</span>}
         <span className={`ko-save-state ${saveState}`}>
           {saveState === 'saving' ? '···' : saveState === 'saved' ? '✓' : saveState === 'error' ? '⚠' : ''}
@@ -113,16 +116,19 @@ function MatchCard({ match, userPicks, realResults, onSave, phaseId }) {
 
       {!hasTeams ? (
         <div className="ko-pending-teams">
-          {phaseId === 'r32' ? 'Admin por definir equipos' : 'Elige ganadores en ronda anterior'}
+          {phaseId === 'r32' ? 'Admin por definir equipos' :
+           isThird ? 'Elige ganadores en Semis' :
+           'Elige ganadores en ronda anterior'}
         </div>
       ) : (
         <>
-          <button className={teamClass(home)} onClick={() => update('winner', localPick.winner === home ? null : home)} disabled={isDisabled}>
+          <button className={`ko-team-btn ${teamClass(home)}`}
+            onClick={() => update('winner', localPick.winner === home ? null : home)} disabled={isDisabled}>
             <span className="ko-flag">{FLAGS[home] || '🏳️'}</span>
             <span className="ko-team-name">{home}</span>
           </button>
 
-          <div className={scoreClass}>
+          <div className={`ko-score-row ${status === 'exact' ? 'score-exact' : ''}`}>
             <input type="number" min="0" max="20" className="ko-score-input"
               value={localPick.home_goals ?? ''} placeholder="-" disabled={isDisabled}
               onChange={e => update('home_goals', e.target.value === '' ? null : Math.max(0, parseInt(e.target.value) || 0))}
@@ -136,13 +142,13 @@ function MatchCard({ match, userPicks, realResults, onSave, phaseId }) {
 
           <label className={`ko-penalties-label ${isDisabled ? 'disabled' : ''}`}>
             <input type="checkbox" checked={!!localPick.penalties}
-              onChange={e => update('penalties', e.target.checked)} disabled={isDisabled}
-            />
+              onChange={e => update('penalties', e.target.checked)} disabled={isDisabled} />
             <span>Penales</span>
             {real.penalties && <span className="ko-penalties-real">✓ Fueron</span>}
           </label>
 
-          <button className={teamClass(away)} onClick={() => update('winner', localPick.winner === away ? null : away)} disabled={isDisabled}>
+          <button className={`ko-team-btn ${teamClass(away)}`}
+            onClick={() => update('winner', localPick.winner === away ? null : away)} disabled={isDisabled}>
             <span className="ko-flag">{FLAGS[away] || '🏳️'}</span>
             <span className="ko-team-name">{away}</span>
           </button>
@@ -170,7 +176,6 @@ export default function KnockoutBracketSection({ session, userPicks, setUserPick
   const [activePhase, setActivePhase] = useState('r32');
 
   const handleSave = useCallback(async (matchId, homeGoals, awayGoals, penalties, winner) => {
-    // Update parent state immediately so flowing picks update in real time
     setUserPicks(prev => ({
       ...prev,
       [matchId]: { ...prev[matchId], match_id: matchId, home_goals: homeGoals, away_goals: awayGoals, penalties, winner }
@@ -188,7 +193,7 @@ export default function KnockoutBracketSection({ session, userPicks, setUserPick
     <div className="ko-bracket-section">
       <div className="ko-bracket-info">
         ⭐ Marcador exacto o penales = <strong>3 pts</strong> &nbsp;·&nbsp; ✓ Ganador = <strong>1 pt</strong><br/>
-        Toca un equipo para marcarlo como tu ganador. En R32 los equipos los define el admin. En las siguientes rondas, avanzan los equipos que elegiste en la ronda anterior.
+        Los equipos de R32 los define el admin. En rondas siguientes, avanzan los ganadores que elegiste antes. En la Final aparecen los perdedores de Semis para el 3° Lugar.
       </div>
 
       <div className="ko-phase-tabs">
@@ -202,23 +207,15 @@ export default function KnockoutBracketSection({ session, userPicks, setUserPick
 
       {definedCount === 0 && (
         <div className="ko-no-teams-notice">
-          {activePhase === 'r32'
-            ? '⏳ El admin aún no ha definido los equipos para esta ronda.'
-            : '⏳ Elige ganadores en la ronda anterior para ver los equipos aquí.'}
+          {activePhase === 'r32' ? '⏳ El admin aún no ha definido los equipos.' : '⏳ Elige ganadores en la ronda anterior para ver los equipos aquí.'}
         </div>
       )}
 
       <div className="ko-bracket-scroll">
         <div className="ko-bracket-cards">
           {phaseData.matches.map(match => (
-            <MatchCard
-              key={match.id}
-              match={match}
-              userPicks={userPicks}
-              realResults={realResults}
-              onSave={handleSave}
-              phaseId={activePhase}
-            />
+            <MatchCard key={match.id} match={match} userPicks={userPicks}
+              realResults={realResults} onSave={handleSave} phaseId={activePhase} />
           ))}
         </div>
       </div>
