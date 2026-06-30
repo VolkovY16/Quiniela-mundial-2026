@@ -1,0 +1,54 @@
+
+/* ─── BRACKET CARD STATES ────────────────────────────────────────────────────── */
+.ko-card-exact  { border-color: var(--green) !important; background: var(--green-light) !important; }
+.ko-card-correct { border-color: var(--gold) !important; background: #fffbe8 !important; }
+.ko-card-wrong  { border-color: var(--red) !important; background: #fdecea !important; }
+
+/* ─── VISUAL BRACKET ─────────────────────────────────────────────────────────── */
+.vb-container { width: 100%; }
+.vb-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 1rem; }
+.vb-bracket {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.5rem; min-width: 900px; padding: 1rem 0.5rem;
+  background: #0a3d22; border-radius: 12px;
+}
+
+.vb-side { display: flex; gap: 0.4rem; }
+.vb-left { flex-direction: row; }
+.vb-right { flex-direction: row-reverse; }
+
+.vb-round { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.vb-round-label { font-size: 0.65rem; font-weight: 800; color: rgba(255,255,255,0.6); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.2rem; }
+.vb-round-matches { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* Vertical spacing — each round has fewer matches so gaps increase */
+.vb-r32 .vb-round-matches { gap: 0.3rem; }
+.vb-r16 .vb-round-matches { gap: 1.2rem; }
+.vb-qf  .vb-round-matches { gap: 3.5rem; }
+.vb-sf  .vb-round-matches { gap: 8rem; }
+
+.vb-match {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; overflow: hidden; width: 130px;
+}
+.vb-match-num { font-size: 0.6rem; color: rgba(255,255,255,0.4); padding: 0.15rem 0.4rem; font-weight: 700; }
+
+.vb-slot {
+  display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem;
+  border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.72rem; font-weight: 600; color: white;
+}
+.vb-slot-empty { color: rgba(255,255,255,0.3); font-style: italic; }
+.vb-slot-winner { background: rgba(13,110,63,0.6); }
+.vb-slot-dark { background: rgba(0,0,0,0.2); }
+.vb-flag { font-size: 1rem; flex-shrink: 0; }
+.vb-team { font-size: 0.65rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+.vb-tbd { font-size: 0.62rem; color: rgba(255,255,255,0.3); }
+
+.vb-center {
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  min-width: 150px; padding: 0 0.5rem;
+}
+.vb-trophy { font-size: 2.5rem; }
+.vb-champion { text-align: center; margin-top: 0.3rem; }
+.vb-champion-flag { font-size: 2rem; }
+.vb-champion-name { font-size: 0.75rem; font-weight: 800; color: var(--gold); margin-top: 0.2rem; }
